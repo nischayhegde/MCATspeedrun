@@ -382,6 +382,119 @@ impl crate::services::SchedulerService for Collection {
             delta_days: self.get_fuzz_delta(input.card_id.into(), input.interval)?,
         })
     }
+
+    fn compute_mcat_readiness(&mut self) -> Result<scheduler::McatReadinessResponse> {
+        build_mcat_readiness(self)
+    }
+
+    fn recompute_mcat_leaf_states(&mut self) -> Result<scheduler::McatReadinessResponse> {
+        self.mcat_recompute_all()?;
+        build_mcat_readiness(self)
+    }
+
+    fn get_mcat_study_queue(
+        &mut self,
+        input: scheduler::McatStudyQueueRequest,
+    ) -> Result<scheduler::McatStudyQueueResponse> {
+        Ok(scheduler::McatStudyQueueResponse {
+            items: self.mcat_study_queue(input.session_size)?,
+        })
+    }
+
+    fn answer_mcat_card(
+        &mut self,
+        input: scheduler::AnswerMcatCardRequest,
+    ) -> Result<scheduler::AnswerMcatCardResponse> {
+        let grade = self.mcat_answer_card(
+            CardId(input.card_id),
+            input.correct,
+            input.milliseconds_taken,
+            input.self_rating,
+        )?;
+        Ok(scheduler::AnswerMcatCardResponse {
+            grade: grade.as_u8() as u32,
+        })
+    }
+
+    fn get_mcat_diagnostic(
+        &mut self,
+        input: scheduler::McatDiagnosticRequest,
+    ) -> Result<scheduler::McatStudyQueueResponse> {
+        Ok(scheduler::McatStudyQueueResponse {
+            items: self.mcat_diagnostic(input.question_count, input.seed)?,
+        })
+    }
+
+    fn reset_mcat_progress(&mut self) -> Result<scheduler::McatReadinessResponse> {
+        self.mcat_reset_progress()?;
+        build_mcat_readiness(self)
+    }
+}
+
+/// Build the MCAT readiness proto from the persisted leaf states, joining each
+/// leaf with its blueprint metadata (name/section/weight) and computing
+/// mastery.
+fn build_mcat_readiness(col: &mut Collection) -> Result<scheduler::McatReadinessResponse> {
+    use std::collections::HashMap;
+
+    use crate::mcat::model::LeafState;
+    use crate::mcat::scoring;
+    use crate::mcat::taxonomy;
+    use crate::mcat::taxonomy::Section;
+
+    fn section_label(section: Section) -> &'static str {
+        match section {
+            Section::Cpbs => "C/P",
+            Section::Bbls => "B/B",
+            Section::Psbb => "P/S",
+            Section::Cars => "CARS",
+        }
+    }
+
+    let states: HashMap<String, LeafState> = col
+        .mcat_leaf_states()?
+        .into_iter()
+        .map(|s| (s.id.clone(), s))
+        .collect();
+    let readiness = scoring::readiness(&states);
+    let confidence = scoring::confidence(&states);
+
+    let leaves = taxonomy::leaves()
+        .into_iter()
+        .map(|leaf| {
+            let s = states
+                .get(leaf.id)
+                .cloned()
+                .unwrap_or_else(|| LeafState::empty(leaf.id));
+            scheduler::McatLeafState {
+                leaf_id: leaf.id.to_string(),
+                name: leaf.name.to_string(),
+                section: section_label(leaf.section).to_string(),
+                is_cars: leaf.is_cars,
+                weight: leaf.weight,
+                fluency: s.fluency,
+                application: s.application,
+                // evidence-shrunk mastery: this is what the readiness roll-up
+                // actually uses, so the per-leaf display matches it
+                mastery: scoring::mastery_adjusted(leaf.is_cars, &s),
+                attempts: s.attempts.round() as u32,
+                freshness: s.freshness,
+                assessed: s.assessed,
+                gate_open: s.gate_open,
+            }
+        })
+        .collect();
+
+    Ok(scheduler::McatReadinessResponse {
+        readiness_pct: readiness.pct,
+        readiness_score: readiness.score,
+        confidence_pct: confidence.pct,
+        coverage: confidence.coverage,
+        depth: confidence.depth,
+        freshness: confidence.freshness,
+        confidence_band: confidence.band,
+        leaves,
+    })
 }
 
 impl crate::services::BackendSchedulerService for Backend {

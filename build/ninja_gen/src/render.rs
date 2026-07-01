@@ -23,10 +23,15 @@ impl Build {
         .unwrap();
 
         writeln!(&mut buf, "builddir = {}", self.buildroot.as_str()).unwrap();
+        // Use the platform's native path separator for the runner executable.
+        // n2 spawns commands via CreateProcessA without a shell on Windows, and
+        // that does not accept a forward-slash relative path for the executable,
+        // so the leading `$runner` token must use backslashes there.
+        let sep = std::path::MAIN_SEPARATOR;
+        let runner_exe = with_exe("runner");
         writeln!(
             &mut buf,
-            "runner = $builddir/rust/release/{}",
-            with_exe("runner")
+            "runner = $builddir{sep}rust{sep}release{sep}{runner_exe}"
         )
         .unwrap();
         for (key, value) in &self.variables {

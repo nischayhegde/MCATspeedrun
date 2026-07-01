@@ -39,6 +39,10 @@ const IGNORED_FOLDERS: &[&str] = &[
     "./.venv",
     "./qt/installer/windows-template",
     "./qt/installer/mac-template",
+    // standalone MCAT content-parsing side project (not Anki-licensed code)
+    "./questionbankparsing",
+    // TypeScript reference engine for the MCAT scoring layer
+    "./mcat-ui",
 ];
 
 fn main() -> Result<()> {

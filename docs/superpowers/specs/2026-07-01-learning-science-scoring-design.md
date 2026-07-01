@@ -11,7 +11,7 @@ Four learning-science-grounded improvements to the MCAT scoring/scheduling layer
 1. **Tediousness-adjusted expected time.** A long answer time only signals
    non-fluency if the item shouldn't take that long. The parser already scores
    every question on `reasoning_complexity` (rc) and `calculation_tedium` (ct)
-   1-5; an item high on either is *legitimately* slow even for a fluent student.
+   1-5; an item high on either is _legitimately_ slow even for a fluent student.
    Latency thresholds must scale with rc/ct so slow-but-tedious isn't
    misflagged as "reasoning through / working-memory reliance".
 2. **Continuous spacing weights.** The spacing effect is continuous; the current
@@ -51,11 +51,11 @@ churn not warranted yet; the shrinkage model is its cheap approximation).
   `spacing_weight = clamp01(elapsed_days / 3.0)`, with the first-ever review of
   a card weighted 1.0. This multiplies into the existing recency-weighted mean
   for automaticity (replacing the hard `massed` filter). The fluency-gate count
-  becomes *effective* spaced-correct: `sum(spacing_weight)` over correct rote
+  becomes _effective_ spaced-correct: `sum(spacing_weight)` over correct rote
   recalls, gate requires `>= 2.0` (two fully-spaced correct recalls, or more
   partially-spaced ones).
 - **Application:** MCQs are one-shot per card, so spacing is measured between
-  consecutive application attempts *within the leaf*. First attempt = 1.0;
+  consecutive application attempts _within the leaf_. First attempt = 1.0;
   subsequent = `max(0.3, clamp01(gap_days / 1.0))`. The 0.3 floor reflects that
   same-day attempts are distinct fresh problems (correlated but still
   evidence) — and keeps the diagnostic (many same-day attempts per leaf) able

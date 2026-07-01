@@ -965,6 +965,19 @@ title="{}" {}>{}</button>""".format(
         self.mainLayout.addWidget(sweb)
         self.form.centralwidget.setLayout(self.mainLayout)
 
+        # MCAT fork: hide Anki's top toolbar (Decks/Add/Browse/Stats/Sync). The
+        # MCAT SvelteKit app renders its own navigation inside the main webview,
+        # so the legacy toolbar is redundant. setVisible()/setFixedHeight() are
+        # not overridden by ToolbarWebView, so this stays hidden permanently
+        # (the class's show()/hide() only toggle a CSS class, never the widget).
+        tweb.setVisible(False)
+        tweb.setFixedHeight(0)
+
+        # MCAT fork: also hide the native File/Edit/View/Tools/Help menu bar.
+        # show_menubar() only restores size constraints (never setVisible), so
+        # this stays hidden even when toggling fullscreen.
+        self.form.menubar.setVisible(False)
+
         # force webengine processes to load before cwd is changed
         if is_win:
             for webview in self.web, self.bottomWeb:

@@ -81,6 +81,14 @@ class DeckBrowser:
         self.refresh()
 
     def refresh(self) -> None:
+        # MCAT: the readiness dashboard replaces the deck list as the main
+        # screen. The old deck browser rendering is preserved below in case it
+        # needs to be exposed again (e.g. via a debug menu).
+        self.web.load_sveltekit_page("mcat")
+        self.mw.bottomWeb.hide()
+        self._refresh_needed = False
+
+    def _legacy_refresh(self) -> None:
         self._renderPage()
         self._refresh_needed = False
 

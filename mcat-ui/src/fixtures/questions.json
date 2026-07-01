@@ -1,0 +1,476 @@
+[
+    {
+        "id": "qbank-000001",
+        "image": "/fixtures/qbank-000001.png",
+        "stem": "Which of the following correctly describes the DNA double helix?\n\nI.  It is held together by hydrogen bonding between the nitrogenous bases.\nII.  Its backbone is composed of alternating ribose sugars and phosphate groups.\nIII.  It typically has a diameter of 20 angstroms.\nIV.  It features pyrimidine-to-pyrimidine and purine-to-purine base pairings.",
+        "choices": {
+            "A": "II only",
+            "B": "I and III",
+            "C": "I, II, and IV",
+            "D": "I, III, and IV"
+        },
+        "hasFigure": false,
+        "hasPassage": false,
+        "answer": {
+            "letter": "B",
+            "explanation": "DNA is structured with the nitrogenous bases on the inside of the helix, connected by H-bonds; this makes choice I true. Choice III correctly identifies the radius of a typical DNA helix as 20 angstroms. II: The sugar in DNA is deoxyribose, not ribose. IV: Purines bind to pyrimidines in double- stranded DNA."
+        },
+        "tags": {
+            "section": "BBLS",
+            "discipline": "Biology",
+            "foundationalConcept": "FC1",
+            "contentCategory": "1B",
+            "skills": [
+                "SIRS1"
+            ],
+            "subtopics": [
+                "DNA double helix structure",
+                "Hydrogen bonding between nucleotide bases",
+                "Sugar-phosphate backbone (deoxyribose vs ribose)",
+                "Watson-Crick base pairing (purine-pyrimidine)",
+                "Helical dimensions (diameter in angstroms)"
+            ]
+        },
+        "difficulty": 2
+    },
+    {
+        "id": "qbank-000002",
+        "image": "/fixtures/qbank-000002.png",
+        "stem": "The structure of a typical nucleoside includes:",
+        "choices": {
+            "A": "a six-carbon sugar.",
+            "B": "a nitrogenous base.",
+            "C": "phosphate groups.",
+            "D": "A and B only."
+        },
+        "hasFigure": false,
+        "hasPassage": false,
+        "answer": {
+            "letter": "B",
+            "explanation": "A nucleoside contains both a sugar and a nitrogenous base, but unlike a nucleotide, it does not include phosphate groups. Additionally, the sugar involved is either ribose or deoxyribose, both of which have five carbons."
+        },
+        "tags": {
+            "section": "BBLS",
+            "discipline": "Biochemistry",
+            "foundationalConcept": "FC1",
+            "contentCategory": "5D",
+            "skills": [
+                "SIRS1"
+            ],
+            "subtopics": [
+                "nucleoside vs nucleotide",
+                "pentose sugars (ribose, deoxyribose)",
+                "nitrogenous bases (purines and pyrimidines)",
+                "molecular components of nucleic acids"
+            ]
+        },
+        "difficulty": 1
+    },
+    {
+        "id": "qbank-000003",
+        "image": "/fixtures/qbank-000003.png",
+        "stem": "The gene encoding a protein involved in cell cycle regulation is analyzed, and researchers conclude that its sense strand contains the following sequence: 5'-AATTGCGCATTGC-3'. The sequence of the corresponding mRNA following transcription is:",
+        "choices": {
+            "A": "5'-AAUUGCGCAUUGC-3'.",
+            "B": "5'-GCAATGCGCAATT-3'.",
+            "C": "5'-GCAAUGCGCAAUU-3'.",
+            "D": "5'-AATTGCGCATTGC-3'."
+        },
+        "hasFigure": false,
+        "hasPassage": false,
+        "answer": {
+            "letter": "A",
+            "explanation": "The sequence given represents part of the sense strand, which is not directly transcribed into mRNA. Instead, it is its complementary partner, the antisense strand, that is transcribed, meaning that the sense strand has the same sequence and directionality as the mRNA (but with uracil instead of thymine). B, D: These sequences include thymine, which is not present in RNA. C: This sequence is complementary to the fragment given. However, the resulting RNA should be complementary to the antisense strand, not the sense strand."
+        },
+        "tags": {
+            "section": "BBLS",
+            "discipline": "Biology",
+            "foundationalConcept": "FC1",
+            "contentCategory": "1B",
+            "skills": [
+                "SIRS1"
+            ],
+            "subtopics": [
+                "DNA sense (coding) vs template strand",
+                "Transcription and mRNA synthesis",
+                "Base pairing rules (A-U, T-A, C-G, G-C)",
+                "Nucleotide directionality (5' to 3')"
+            ]
+        },
+        "difficulty": 2
+    },
+    {
+        "id": "qbank-000004",
+        "image": "/fixtures/qbank-000004.png",
+        "stem": "Due to a point mutation during replication, one guanine base is now paired with adenine instead of cytosine. How might the cell’s proofreading machinery be able to recognize this mistake?",
+        "choices": {
+            "A": "Because both adenine and guanine are pyrimidines, the DNA strand will be narrower at the site of the mutation.",
+            "B": "Because both adenine and guanine are purines, the DNA strand will be narrower at the site of the mutation.",
+            "C": "Because both adenine and guanine are pyrimidines, the DNA strand will be wider at the site of the mutation.",
+            "D": "Because both adenine and guanine are purines, the DNA strand will be wider at the site of the mutation."
+        },
+        "hasFigure": false,
+        "hasPassage": false,
+        "answer": {
+            "letter": "D",
+            "explanation": "Both adenine and guanine are purine bases, which have structures composed of two fused rings. In contrast, pyrimidine structures contain only one ring. A purine-purine base pairing would thus be wider than the typical purine-pyrimidine pairing. A, C: These statements incorrectly identify adenine and guanine as pyrimidines. B: This incorrectly states that the purine-purine base pairing would be narrower."
+        },
+        "tags": {
+            "section": "BBLS",
+            "discipline": "Biology",
+            "foundationalConcept": "FC1",
+            "contentCategory": "1C",
+            "skills": [
+                "SIRS1"
+            ],
+            "subtopics": [
+                "DNA base pairing (A-T, G-C)",
+                "Purines vs pyrimidines",
+                "DNA helix geometry and width",
+                "Proofreading and mismatch recognition",
+                "Point mutations and replication fidelity"
+            ]
+        },
+        "difficulty": 1
+    },
+    {
+        "id": "qbank-000005",
+        "image": "/fixtures/qbank-000005.png",
+        "stem": "A scientist is investigating the effect of single base pair mutations on the activity of a gene that is heavily expressed in neurons. He focuses on a sequence within the noncoding strand, 5'-CCTTGATCCATT-3'. Which of the following represents the sequence of a coding strand that could NOT be used to test these types of mutations?",
+        "choices": {
+            "A": "5'-AATGGATCCAGG-3'",
+            "B": "5'-AATTGATCCAGG-3'",
+            "C": "5'-AATGAATCAAGG-3'",
+            "D": "5'-AATGGATTAAGG-3'"
+        },
+        "hasFigure": false,
+        "hasPassage": false,
+        "answer": {
+            "letter": "B",
+            "explanation": "We are told that each sample being tested should have a single mutated base pair. All of the choices are very close to the complement of the noncoding sequence given, but B has two base pairs that are mutated instead of one."
+        },
+        "tags": {
+            "section": "BBLS",
+            "discipline": "Biology",
+            "foundationalConcept": "FC1",
+            "contentCategory": "1B",
+            "skills": [
+                "SIRS1",
+                "SIRS2"
+            ],
+            "subtopics": [
+                "DNA base-pairing (complementarity)",
+                "Coding vs. template (noncoding) strand distinctions",
+                "Transcription and mRNA sequence determination",
+                "Point (single base) mutations and their testing",
+                "Nucleotide sequence orientation (5' vs 3')"
+            ]
+        },
+        "difficulty": 2
+    },
+    {
+        "id": "qbank-000009",
+        "image": "/fixtures/qbank-000009.png",
+        "stem": "Thermal vents along the ocean floor emit water ranging from sixty to several hundred degrees Celsius. Which of the samples most likely came from bacteria that thrive in these vents?",
+        "choices": {
+            "A": "Sample A",
+            "B": "Sample B",
+            "C": "Sample C",
+            "D": "Sample D"
+        },
+        "hasFigure": true,
+        "hasPassage": true,
+        "answer": {
+            "letter": "A",
+            "explanation": "For an organism to live at such high temperatures, its DNA must be very stable and resistant to denaturation. A higher G-C content leads to stronger DNA due to the increased number of hydrogen bonds between the strands. Sample A contains the DNA with the highest G-C content."
+        },
+        "tags": {
+            "section": "BBLS",
+            "discipline": "Biochemistry",
+            "foundationalConcept": "FC5",
+            "contentCategory": "5B",
+            "skills": [
+                "SIRS1"
+            ],
+            "subtopics": [
+                "DNA base composition",
+                "GC content and thermal stability",
+                "DNA melting temperature (Tm)",
+                "Hydrogen bonding between base pairs",
+                "Thermophilic adaptation"
+            ]
+        },
+        "difficulty": 2
+    },
+    {
+        "id": "qbank-000010",
+        "image": "/fixtures/qbank-000010.png",
+        "stem": "A researcher is attempting to design a hypothetical new lifeform that does not rely on DNA for the storage of genetic information. He starts by identifying various molecules with properties that make them potential DNA alternatives. Which of the following characteristics should these alternative molecules possess?",
+        "choices": {
+            "A": "The ability to form a long, highly stable polymer",
+            "B": "The ability to be replicated with a high rate of accuracy and speed",
+            "C": "The ability to code for other macromolecules used throughout the cell",
+            "D": "All of the above are necessary characteristics."
+        },
+        "hasFigure": false,
+        "hasPassage": false,
+        "answer": {
+            "letter": "D",
+            "explanation": "We are looking for characteristics that resemble those of DNA. DNA is able to form a long, stable polymer of nucleotides. It can also be replicated with a high rate of accuracy, and it codes for mRNA, which is later translated into protein."
+        },
+        "tags": {
+            "section": "BBLS",
+            "discipline": "Biology",
+            "foundationalConcept": "FC1",
+            "contentCategory": "1C",
+            "skills": [
+                "SIRS1"
+            ],
+            "subtopics": [
+                "genetic material properties",
+                "polymer stability",
+                "replication fidelity",
+                "coding for proteins",
+                "molecular basis of heredity"
+            ]
+        },
+        "difficulty": 1
+    },
+    {
+        "id": "qbank-000011",
+        "image": "/fixtures/qbank-000011.png",
+        "stem": "Which of the following enzymes are involved in DNA replication in human cells?\n\nI. Taq polymerase\nII. Telomerase\nIII. Ligase\nIV. Transcriptase",
+        "choices": {
+            "A": "I and III",
+            "B": "II and III",
+            "C": "II and IV",
+            "D": "I, II, and III"
+        },
+        "hasFigure": false,
+        "hasPassage": false,
+        "answer": {
+            "letter": "B",
+            "explanation": "Telomerase is required for DNA replication, as it contributes to maintaining the integrity of the genome. Because DNA polymerase reads the template from 3' to 5' and can only begin replication where a primer has been established, the 3' ends of chromosomes generally are not replicated. Telomerase adds a repeating sequence to prevent these ends from shortening during every 339 © 2016 Next Step Pre-Med. All rights reserved. No duplication or distribution of this document is permitted without express written consent. MCAT QBOOK: MORE MCAT PRACTICE replication cycle. Ligase is also necessary, and has the role of joining the Okazaki fragments on the lagging strand. I: Taq polymerase has a bacterial origin and is used in PCR, not natural human cells. IV: Transcriptase enzymes are involved in transcription, not replication."
+        },
+        "tags": {
+            "section": "BBLS",
+            "discipline": "Biology",
+            "foundationalConcept": "FC1",
+            "contentCategory": "1C",
+            "skills": [
+                "SIRS1"
+            ],
+            "subtopics": [
+                "DNA replication",
+                "DNA polymerases",
+                "Telomerase function",
+                "DNA ligase",
+                "Reverse transcriptase / transcriptase distinction"
+            ]
+        },
+        "difficulty": 2
+    },
+    {
+        "id": "qbank-000012",
+        "image": "/fixtures/qbank-000012.png",
+        "stem": "DNA replication is understood to be semiconservative. To ascertain this, a geneticist radiolabeled a fragment of dsDNA and allowed it to replicate. After four successive replication cycles, what fraction of the total DNA consists of the original parent material?",
+        "choices": {
+            "A": "1/4",
+            "B": "1/8",
+            "C": "1/16",
+            "D": "1/32"
+        },
+        "hasFigure": false,
+        "hasPassage": false,
+        "answer": {
+            "letter": "C",
+            "explanation": "In semiconservative replication, the parent dsDNA is denatured so that each strand can be used as a template to form a new piece of DNA. As a result, the two dsDNA products of the first replication will each contain one strand of original DNA and one new strand. After the fourth replication, a total of 16 dsDNA molecules will exist, or 32 single strands. Of those molecules, only two of them come from the original parent DNA. Thus, our fraction is 2/32, or 1/16."
+        },
+        "tags": {
+            "section": "BBLS",
+            "discipline": "Biology",
+            "foundationalConcept": "FC1",
+            "contentCategory": "1C",
+            "skills": [
+                "SIRS2"
+            ],
+            "subtopics": [
+                "Semiconservative DNA replication",
+                "Dilution of labeled parental strands over replication cycles",
+                "Radiolabeling DNA to track inheritance",
+                "Exponential decay of original material with successive replications",
+                "Calculation of fractions after n replication cycles"
+            ]
+        },
+        "difficulty": 2
+    },
+    {
+        "id": "qbank-000013",
+        "image": "/fixtures/qbank-000013.png",
+        "stem": "13. To perform a successful PCR reaction, all of the following reactants must be present EXCEPT:",
+        "choices": {
+            "A": "forward and reverse primers.",
+            "B": "Taq polymerase.",
+            "C": "a magnesium-containing buffer.",
+            "D": "dideoxynucleoside triphosphates (ddNTPs)."
+        },
+        "hasFigure": false,
+        "hasPassage": false,
+        "answer": {
+            "letter": "D",
+            "explanation": "A dideoxynucleoside triphosphate lacks an -OH group at both its 2' and 3' positions. Since DNA polymerase requires a free 3' –OH to continue replication, ddNTPs serve as inhibitors of the chain elongation. In other words, incorporation of a ddNTP results in the termination of replication. A: Primers bind to the gene of interest and signal where DNA polymerase should attach. Primers are required for both strands of the dsDNA molecule. B: Heat-resistant Taq polymerase is the most common “lab polymerase” enzyme used in PCR reactions. C: Magnesium-containing buffer serves as a cofactor for Taq polymerase. Specifically, it stabilizes the negative charges on the two strands, which would otherwise repel each other."
+        },
+        "tags": {
+            "section": "BBLS",
+            "discipline": "Biology",
+            "foundationalConcept": "FC1",
+            "contentCategory": "1B",
+            "skills": [
+                "SIRS1"
+            ],
+            "subtopics": [
+                "Polymerase chain reaction (PCR)",
+                "DNA polymerase (Taq) function",
+                "Role of primers in PCR",
+                "Mg2+ as a polymerase cofactor",
+                "Dideoxynucleotides and chain termination / Sanger sequencing"
+            ]
+        },
+        "difficulty": 2
+    },
+    {
+        "id": "qbank-000014",
+        "image": "/fixtures/qbank-000014.png",
+        "stem": "What purpose do primers serve in the initiation of DNA replication?",
+        "choices": {
+            "A": "They signal the location at which to form the replication fork.",
+            "B": "They provide sites to which a vital enzyme can bind.",
+            "C": "They indicate which of the two strands of parent DNA is to be replicated.",
+            "D": "They disrupt hydrogen bonding between base pairs, allowing the double helix to unwind more easily."
+        },
+        "hasFigure": false,
+        "hasPassage": false,
+        "answer": {
+            "letter": "B",
+            "explanation": "DNA polymerase catalyzes the elongation of new DNA strands. However, this enzyme cannot initiate DNA synthesis on its own, as it can only bind to a free –OH group that is already present on the developing strand. RNA primers provide these free 3' hydroxyl groups. A: While the replication fork does initially form at the site where replication begins, it then moves along the strands as they are unwound by helicase. The fork does not relate to the direct function of primers. C: Both parent strands are used as templates during DNA replication. 340 © 2016 Next Step Pre-Med. All rights reserved. No duplication or distribution of this document is permitted without express written consent. D: This more closely relates to the function of helicase."
+        },
+        "tags": {
+            "section": "BBLS",
+            "discipline": "Biology",
+            "foundationalConcept": "FC1",
+            "contentCategory": "1C",
+            "skills": [
+                "SIRS1"
+            ],
+            "subtopics": [
+                "DNA replication initiation",
+                "RNA primers",
+                "Primase and DNA polymerase interaction",
+                "Requirement for 3' hydroxyl for polymerase activity",
+                "Replication origin vs replication fork"
+            ]
+        },
+        "difficulty": 1
+    },
+    {
+        "id": "qbank-000015",
+        "image": "/fixtures/qbank-000015.png",
+        "stem": "A certain X-linked disease inhibits the cell’s ability to produce telomerase. With regard to chromosome structure, a male with one copy of the disease allele would differ from a healthy male in what way?",
+        "choices": {
+            "A": "His chromosomes would shorten over the course of several replication cycles.",
+            "B": "His newly synthesized DNA would be unable to rewind after replication.",
+            "C": "His total amount of supercoiled DNA would increase.",
+            "D": "The two individuals would not differ in their chromosome structure."
+        },
+        "hasFigure": false,
+        "hasPassage": false,
+        "answer": {
+            "letter": "A",
+            "explanation": "Telomerase adds the sequence “TTAGGG” to the 3' end of each telomere to compensate for DNA polymerase’s inability to replicate the ends of chromosomes. Without telomerase, the chromosomes would gradually shorten. B, C: Neither reannealing nor supercoiling relates to telomerase. D: Since this condition is X-linked, males only need one copy to express the disease phenotype."
+        },
+        "tags": {
+            "section": "BBLS",
+            "discipline": "Biology",
+            "foundationalConcept": "FC1",
+            "contentCategory": "1C",
+            "skills": [
+                "SIRS1"
+            ],
+            "subtopics": [
+                "Telomerase function",
+                "Telomere shortening / end-replication problem",
+                "Chromosome structure",
+                "X-linked inheritance"
+            ]
+        },
+        "difficulty": 2
+    },
+    {
+        "id": "qbank-000016",
+        "image": "/fixtures/qbank-000016.png",
+        "stem": "The figure below shows the nitrogenous bases involved in DNA base pairing.\n\n[Figure: chemical structures of thymine, cytosine, adenine, and guanine are shown, each labeled accordingly.]\n\nWhat structural elements make AT-rich sequences especially appropriate targets for initiation proteins during replication?",
+        "choices": {
+            "A": "The pairing of a purine and pyrimidine results in a low bond dissociation energy.",
+            "B": "Thymine’s ketone groups facilitate the binding of initiation proteins.",
+            "C": "The interaction between adenine and thymine involves fewer hydrogen bonds than that between cytosine and guanine.",
+            "D": "The AT pair exhibits resonance, making its binding especially stable and comparatively inert."
+        },
+        "hasFigure": true,
+        "hasPassage": false,
+        "answer": {
+            "letter": "C",
+            "explanation": "The initiation process requires that the double helix be unwound and the hydrogen bonding between base pairs be broken. Initiation proteins target AT pairs because only two hydrogen bonds form between the bases, requiring less energy to break than the three H-bonds that connect guanine and cytosine. A: Both AT and GC pairs include one purine and one pyrimidine. D: Since DNA replication requires denaturation of the double helix, an inert structure would be an undesirable site to initiate the process. Inert compounds are unreactive and would be difficult to denature."
+        },
+        "tags": {
+            "section": "BBLS",
+            "discipline": "Biology",
+            "foundationalConcept": "FC1",
+            "contentCategory": "1C",
+            "skills": [
+                "SIRS1"
+            ],
+            "subtopics": [
+                "DNA base pairing",
+                "hydrogen bonding (A-T vs G-C)",
+                "DNA replication initiation / origins of replication",
+                "base pair stability and melting",
+                "role of AT-rich regions in strand separation"
+            ]
+        },
+        "difficulty": 1
+    },
+    {
+        "id": "qbank-000017",
+        "image": "/fixtures/qbank-000017.png",
+        "stem": "One of the fundamental qualities of DNA polymerase is its inability to initiate replication. In humans, for example, it can only begin to extend a strand when a short RNA primer is already present. A scientist thinks he has discovered a retrovirus that employs tRNA to initiate DNA synthesis rather than traditional primers. Is this possible?",
+        "choices": {
+            "A": "Yes, tRNA has an innate ability to mimic the function of enzymes such as primase.",
+            "B": "Yes, both the tRNA molecule and the RNA primers provide a free 3' –OH group as an attachment site for enzymes that elongate the chain.",
+            "C": "No, retroviruses utilize reverse transcriptase instead of DNA polymerase.",
+            "D": "No, tRNA only functions in the assembly of proteins at viral ribosomes."
+        },
+        "hasFigure": false,
+        "hasPassage": false,
+        "answer": {
+            "letter": "B",
+            "explanation": "This situation is possible, and in fact describes how retroviruses generally synthesize DNA. Eukaryotic DNA polymerase requires a free 3' -OH group, which is provided by a short RNA strand synthesized by primase enzymes. Retroviruses, on the other hand, use reverse transcriptase to form DNA from an RNA template. The retrovirus in the question lacks a primase and instead uses reverse transcriptase to elongate the 3' OH provided by the tRNA. A: tRNA does not mimic any enzymatic function. C: While this is true, it does not answer the question. Reverse transcriptase has a DNA polymerase activity and initiates synthesis by binding to a specific tRNA. D: Viruses do not contain ribosomes or other organelles."
+        },
+        "tags": {
+            "section": "BBLS",
+            "discipline": "Biology",
+            "foundationalConcept": "FC1",
+            "contentCategory": "1C",
+            "skills": [
+                "SIRS1"
+            ],
+            "subtopics": [
+                "DNA replication initiation",
+                "RNA primers and primase",
+                "tRNA structure and function",
+                "Retrovirus replication (reverse transcription)",
+                "3'-hydroxyl requirement for polymerization"
+            ]
+        },
+        "difficulty": 2
+    }
+]

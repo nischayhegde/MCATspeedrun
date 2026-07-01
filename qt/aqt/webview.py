@@ -142,6 +142,9 @@ class AnkiWebPage(QWebEnginePage):
             AnkiWebViewKind.IMPORT_ANKI_PACKAGE,
             AnkiWebViewKind.IMPORT_CSV,
             AnkiWebViewKind.IMPORT_LOG,
+            # MCAT fork: the main webview hosts our first-party SvelteKit app
+            # (dashboard / study / diagnostic), which needs backend API access.
+            AnkiWebViewKind.MAIN,
         )
 
         global _profile_with_api_access, _profile_without_api_access

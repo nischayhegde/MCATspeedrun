@@ -422,6 +422,7 @@ def is_sveltekit_page(path: str) -> bool:
         "import-csv",
         "import-page",
         "image-occlusion",
+        "mcat",
     ]
 
 
@@ -762,6 +763,13 @@ exposed_backend_list = [
     "get_optimal_retention_parameters",
     "simulate_fsrs_review",
     "simulate_fsrs_workload",
+    # SchedulerService: MCAT scoring layer
+    "compute_mcat_readiness",
+    "recompute_mcat_leaf_states",
+    "get_mcat_study_queue",
+    "answer_mcat_card",
+    "get_mcat_diagnostic",
+    "reset_mcat_progress",
     # DeckConfigService
     "get_ignored_before_count",
     "get_retention_workload",

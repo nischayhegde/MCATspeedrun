@@ -547,6 +547,11 @@ impl SqliteStorage {
             storage.commit_trx()?;
         }
 
+        // Idempotent, side-table for the MCAT scoring layer. Uses
+        // `CREATE TABLE IF NOT EXISTS`, so it is safe to run unconditionally on
+        // every open and does not participate in Anki's schema versioning/sync.
+        storage.create_mcat_tables()?;
+
         Ok(storage)
     }
 

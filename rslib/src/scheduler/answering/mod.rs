@@ -384,6 +384,18 @@ impl Collection {
             )?;
         }
 
+        // MCAT scoring layer: refresh the answered card's per-subtopic state.
+        // Skipped for previews, and non-fatal so a failure here never blocks a
+        // normal answer (no-op for non-MCAT cards).
+        if !matches!(
+            answer.current_state,
+            CardState::Filtered(FilteredState::Preview(_))
+        ) {
+            if let Err(err) = self.mcat_update_leaf_for_card(&card) {
+                tracing::warn!(?err, "failed to update mcat leaf state");
+            }
+        }
+
         Ok(())
     }
 

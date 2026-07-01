@@ -64,6 +64,28 @@ service SchedulerService {
   // The number of days the calculated interval was fuzzed by on the previous
   // review (if any). Utilized by the FSRS add-on.
   rpc FuzzDelta(FuzzDeltaRequest) returns (FuzzDeltaResponse);
+  // MCAT scoring layer: blueprint-weighted readiness + confidence +
+  // per-subtopic fluency/application, read from the persisted mcat_leaf_state
+  // table.
+  rpc ComputeMcatReadiness(generic.Empty) returns (McatReadinessResponse);
+  // Recompute every leaf's state from the review log + FSRS memory, persist it,
+  // and return the refreshed readiness (e.g. after import or a diagnostic).
+  rpc RecomputeMcatLeafStates(generic.Empty) returns (McatReadinessResponse);
+  // Build the interleaved MCAT study queue (rote flashcards for non-fluent
+  // subtopics + fresh application MCQs for fluent/CARS subtopics).
+  rpc GetMcatStudyQueue(McatStudyQueueRequest) returns (McatStudyQueueResponse);
+  // Answer an MCAT item. MCQs are auto-graded from correctness + latency;
+  // flashcards use the learner's self rating. Updates FSRS scheduling, the
+  // review log, and the per-subtopic leaf state.
+  rpc AnswerMcatCard(AnswerMcatCardRequest) returns (AnswerMcatCardResponse);
+  // Build the stratified-random diagnostic exam (blueprint coverage + a spread
+  // of difficulty). Returns MCQ study items with no correctness revealed.
+  rpc GetMcatDiagnostic(McatDiagnosticRequest) returns (McatStudyQueueResponse);
+  // Wipe all MCAT progress: reset every MCAT card to new (clearing FSRS memory
+  // + scheduling), delete the review log for those cards, and clear the
+  // per-subtopic leaf state. Imported content is preserved. Returns the reset
+  // (baseline) readiness.
+  rpc ResetMcatProgress(generic.Empty) returns (McatReadinessResponse);
 }
 
 // Implicitly includes any of the above methods that are not listed in the
@@ -482,4 +504,97 @@ message FuzzDeltaRequest {
 
 message FuzzDeltaResponse {
   sint32 delta_days = 1;
+}
+
+// One MCAT subtopic ("leaf" = content category or CARS skill) with its derived
+// study state and blueprint metadata.
+message McatLeafState {
+  string leaf_id = 1;
+  string name = 2;
+  // Short section label, e.g. "C/P", "B/B", "P/S", "CARS".
+  string section = 3;
+  bool is_cars = 4;
+  // Blueprint weight (all leaves sum to ~1).
+  float weight = 5;
+  float fluency = 6;
+  float application = 7;
+  // Application-weighted mastery used for the readiness roll-up.
+  float mastery = 8;
+  uint32 attempts = 9;
+  float freshness = 10;
+  bool assessed = 11;
+  // Fluency gate: rote must be fluent before application unlocks (always open
+  // for CARS).
+  bool gate_open = 12;
+}
+
+message McatStudyQueueRequest {
+  // Maximum items in the session (0 = default from StudyConfig).
+  uint32 session_size = 1;
+}
+
+message McatDiagnosticRequest {
+  // Number of questions (0 = default of 120).
+  uint32 question_count = 1;
+  // Deterministic selection seed (0 = derive from current time).
+  uint64 seed = 2;
+}
+
+// One study item: either a rote flashcard (front/back) or an application MCQ
+// (question image or stem + A-D choices).
+message McatStudyItem {
+  enum Kind {
+    FLASHCARD = 0;
+    MCQ = 1;
+  }
+  int64 card_id = 1;
+  string leaf_id = 2;
+  string leaf_name = 3;
+  string section = 4;
+  bool is_cars = 5;
+  Kind kind = 6;
+  // Flashcard: front/back text. MCQ: question stem (may be empty when an
+  // image is used) and image file name in the media folder.
+  string front = 7;
+  string back = 8;
+  string image = 9;
+  // MCQ choices in A,B,C,D order (letter-only display also allowed).
+  repeated string choices = 10;
+  // Correct answer letter, e.g. "C" (empty for flashcards).
+  string answer = 11;
+  string explanation = 12;
+}
+
+message McatStudyQueueResponse {
+  repeated McatStudyItem items = 1;
+}
+
+message AnswerMcatCardRequest {
+  int64 card_id = 1;
+  // MCQs: whether the chosen letter was correct. Flashcards: ignored.
+  bool correct = 2;
+  // Response latency in ms.
+  uint32 milliseconds_taken = 3;
+  // Flashcards only: self rating 1=Again 2=Hard 3=Good 4=Easy. 0 for MCQs.
+  uint32 self_rating = 4;
+}
+
+message AnswerMcatCardResponse {
+  // The FSRS grade that was applied (1=Again 2=Hard 3=Good 4=Easy).
+  uint32 grade = 1;
+}
+
+message McatReadinessResponse {
+  // 0..100 blueprint-weighted mastery.
+  float readiness_pct = 1;
+  // Mapped to the MCAT 472..528 scale.
+  int32 readiness_score = 2;
+  // 0..100 confidence in the readiness number.
+  float confidence_pct = 3;
+  float coverage = 4;
+  float depth = 5;
+  float freshness = 6;
+  // +/- points band on the 472..528 scale.
+  int32 confidence_band = 7;
+  repeated McatLeafState leaves = 8;
 }
