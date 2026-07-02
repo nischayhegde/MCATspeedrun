@@ -5,13 +5,34 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 <script lang="ts">
     import { CLIPS } from "../ring/clips";
     import FighterRig from "../ring/FighterRig.svelte";
+    import FightRing from "../ring/FightRing.svelte";
     import { BUILD_BULK } from "../ring/geometry";
     import HeavyBag from "../ring/HeavyBag.svelte";
+    import type { FightEventKind } from "../ring/machine";
     import RingFx from "../ring/RingFx.svelte";
-    import { SPECIES } from "../ring/roster";
+    import { opponentFor, SPECIES } from "../ring/roster";
 
     const specs = Object.values(SPECIES);
     const bulks = Object.entries(BUILD_BULK);
+
+    // --- Step-3 FightRing harness -------------------------------------------
+    const ringOpponent = opponentFor(
+        { cardId: 5n, difficulty: 5, fsrsDifficulty: 5, difficultyTagged: true },
+        new Map(),
+    ); // bullhorn (tier 5)
+    const eventKinds: FightEventKind[] = [
+        "question",
+        "fast-correct", "slow-correct", "wrong", "idk",
+        "rate-again", "rate-hard", "rate-good", "rate-easy",
+        "bag-hit",
+        "results-win", "results-draw", "results-loss",
+    ];
+    let ringTrigger = 0;
+    let ringEvent: { kind: FightEventKind; trigger: number } | null = null;
+    function fire(kind: FightEventKind): void {
+        ringTrigger += 1;
+        ringEvent = { kind, trigger: ringTrigger };
+    }
 
     // --- Step-4 clip player -------------------------------------------------
     const clipIds = Object.keys(CLIPS);
@@ -118,6 +139,22 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         </div>
     </section>
     <section>
+        <h2>FightRing (spar vs. Bullhorn)</h2>
+        <FightRing
+            mode="spar"
+            event={ringEvent}
+            opponent={ringOpponent}
+            marquee="SPARRING — GALLERY"
+            heroBulkValue={0.5}
+        />
+        <div class="row buttons">
+            {#each eventKinds as kind (kind)}
+                <button on:click={() => fire(kind)}>{kind}</button>
+            {/each}
+        </div>
+    </section>
+
+    <section>
         <h2>Species</h2>
         <div class="row">
             {#each specs as s (s.id)}
@@ -198,5 +235,22 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .fx-frame.bag {
         overflow: hidden;
+    }
+    .row.buttons {
+        margin-top: 0.75rem;
+        gap: 0.4rem;
+    }
+    .row.buttons button {
+        font: inherit;
+        font-size: 11px;
+        padding: 0.3rem 0.6rem;
+        border-radius: 0.5rem;
+        border: 1px solid var(--sf-border);
+        background: var(--sf-surface);
+        color: var(--sf-text);
+        cursor: pointer;
+    }
+    .row.buttons button:hover {
+        border-color: var(--sf-red);
     }
 </style>

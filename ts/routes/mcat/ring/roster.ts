@@ -136,6 +136,19 @@ export const SPECIES: Record<Species, SpeciesSpec> = {
     },
 };
 
+/* The hero fighter: not part of the opponent roster, but shares SpeciesSpec
+   so FighterRig can render it identically. Rookie-shaped silhouette (reuses
+   the rookie head/headgear paths) in the hero palette. */
+export const HERO: SpeciesSpec = {
+    id: "rookie", name: "YOU", chassis: "biped", build: "lean",
+    headPath: SPECIES.rookie.headPath,
+    extraPaths: SPECIES.rookie.extraPaths,
+    palettes: [
+        { skin: "#e0b088", trunks: "#c81e2c", glove: "#e11d2f", accent: "#f5c451" },
+    ],
+    hitSfx: "POW!", amp: 1.0, wt: 1.0,
+};
+
 export const TIER_SPECIES: Record<Tier, Species[]> = {
     1: ["rookie"], 2: ["sidewinder"], 3: ["hobnail"],
     4: ["howler", "gravel"], 5: ["bullhorn"], 6: ["chiron"],

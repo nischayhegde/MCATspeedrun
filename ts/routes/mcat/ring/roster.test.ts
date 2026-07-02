@@ -3,7 +3,7 @@
 
 import { expect, test } from "vitest";
 
-import { heroBulk, opponentFor, SPECIES, tierFor, tierFromMastery, type Tier } from "./roster";
+import { HERO, heroBulk, opponentFor, SPECIES, tierFor, tierFromMastery, type Tier } from "./roster";
 
 test("tierFor follows the spec formula", () => {
     expect(tierFor(3, 0, true)).toBe(3);          // untagged fsrs -> authored
@@ -45,4 +45,8 @@ test("all seven species exist with heads and palettes", () => {
         expect(s.headPath.length).toBeGreaterThan(10);
         expect(s.palettes.length).toBeGreaterThanOrEqual(2);
     }
+});
+
+test("HERO carries the hero palette", () => {
+    expect(HERO.palettes[0].glove).toBe("#e11d2f");
 });
