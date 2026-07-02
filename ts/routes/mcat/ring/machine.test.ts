@@ -20,6 +20,14 @@ test("reading state is structurally quiet", () => {
     expect(CLIPS[m.oppStance].intensity).toBe(1);
 });
 
+test("train mode reading state keeps the jumprope", () => {
+    let m = initialModel("train");
+    m = reduce(m, { kind: "rate-good", trigger: 1 }, pools());
+    m = reduce(m, { kind: "question", trigger: 2 }, pools());
+    expect(m.status).toBe("reading");
+    expect(m.heroStance).toBe("stance-jumprope");
+});
+
 test("fast-correct schedules hero strike then matched opponent react", () => {
     const m = reduce(initialModel("spar"), { kind: "fast-correct", trigger: 1 }, pools());
     const hero = m.queue.find((q) => q.who === "hero")!;
@@ -47,7 +55,10 @@ test("bag mode reacts identically for every answer (no leak)", () => {
 
 test("a new event replaces the queue (no pile-up behind a fast student)", () => {
     let m = reduce(initialModel("spar"), { kind: "wrong", trigger: 1 }, pools());
-    const before = m.queue;
+    const beforeClips = m.queue.map((q) => q.clip);
     m = reduce(m, { kind: "fast-correct", trigger: 2 }, pools());
-    expect(m.queue).not.toEqual(before);
+    expect(m.queue).toHaveLength(2);
+    expect(m.queue.find((q) => q.who === "hero")!.clip.startsWith("atk-")).toBe(true);
+    // nothing from the wrong-exchange survives into the new queue
+    expect(m.queue.every((q) => !beforeClips.includes(q.clip))).toBe(true);
 });
