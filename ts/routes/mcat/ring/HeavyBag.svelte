@@ -14,6 +14,7 @@ Boxer.svelte bag — the keyframe values already read well.
 {#key swingTrigger}
     <div class="bag-rig {swing ? 'swing-bag-' + swing : 'idle'}" aria-hidden="true">
         <div class="bag-strap"></div>
+        <div class="bag-cap"></div>
         <div class="bag"></div>
     </div>
 {/key}
@@ -41,6 +42,17 @@ Boxer.svelte bag — the keyframe values already read well.
         background: linear-gradient(180deg, #4a5262, #2b3240);
         box-shadow: 0 0 0 1px #05070c;
     }
+    .bag-cap {
+        position: absolute;
+        top: 12%;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 36px;
+        height: 8px;
+        border-radius: 4px;
+        background: linear-gradient(180deg, #ffe9ad, #f5c451 55%, #a3792b);
+        box-shadow: 0 0 0 1px #05070c;
+    }
     .bag {
         position: absolute;
         top: 16%;
@@ -49,33 +61,28 @@ Boxer.svelte bag — the keyframe values already read well.
         width: 32px;
         height: 74%;
         border-radius: 13px / 18px;
-        background: linear-gradient(180deg, #c94a2f 0%, #9c331d 55%, #7a2616 100%);
+        background:
+            linear-gradient(100deg, rgb(255 255 255 / 18%) 0%, transparent 30%),
+            linear-gradient(180deg, #d9542f 0%, #a8341c 45%, #6e1e10 100%);
         border: 2px solid #05070c;
         box-shadow:
-            inset -5px 0 0 rgba(0, 0, 0, 0.22),
-            inset 5px 0 0 rgba(255, 255, 255, 0.08);
+            inset -6px 0 0 rgba(0, 0, 0, 0.28),
+            inset 6px 0 0 rgba(255, 255, 255, 0.1);
     }
-    /* top cap + a couple of seams so it reads as a heavy bag */
-    .bag::before {
-        content: "";
-        position: absolute;
-        top: -4px;
-        left: -2px;
-        right: -2px;
-        height: 8px;
-        border-radius: 4px;
-        background: var(--sf-gold, #f5c451);
-        box-shadow: 0 0 0 1px #05070c;
-    }
+    .bag::before,
     .bag::after {
         content: "";
         position: absolute;
         left: 3px;
         right: 3px;
-        top: 42%;
         height: 2px;
-        background: rgba(0, 0, 0, 0.28);
-        box-shadow: 0 8px 0 rgba(0, 0, 0, 0.28);
+        background: repeating-linear-gradient(90deg, rgb(0 0 0 / 45%) 0 3px, transparent 3px 6px);
+    }
+    .bag::before {
+        top: 40%;
+    }
+    .bag::after {
+        top: 62%;
     }
 
     @keyframes bagSway {
