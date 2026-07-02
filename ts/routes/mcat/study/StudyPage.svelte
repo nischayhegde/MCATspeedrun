@@ -103,7 +103,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             millisecondsTaken: elapsedMs(),
             selfRating: 0,
         });
-        fire(wasCorrect ? (wasFast ? "fast-correct" : "slow-correct") : "wrong");
+        if (!wasCorrect) {
+            fire("wrong");
+        } else if (wasFast) {
+            fire("fast-correct");
+        } else {
+            fire("slow-correct");
+        }
         answering = false;
     }
 
