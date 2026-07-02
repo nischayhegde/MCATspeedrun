@@ -802,7 +802,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     /* draw-glove-touch: front glove extends to center, head nod */
     .rig.draw-glove-touch {
         @include g.oneshot(900ms);
-        animation-name: draw-arm-front;
+        animation-name: draw-root;
         .arm.front {
             @include g.oneshot(900ms);
             animation-name: draw-arm-front;
@@ -817,6 +817,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         }
         .arm.back { transform: rotate(-84deg); }
         .forearm.back { transform: rotate(-116deg); }
+    }
+    @keyframes draw-root {
+        0%, 100% { transform: translateX(0); }
     }
     @keyframes draw-arm-front {
         0% { transform: rotate(82deg); }
@@ -838,7 +841,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     /* loss-towel-nod: head drops, then back to guard (determined, not humiliated) */
     .rig.loss-towel-nod {
         @include g.oneshot(1100ms);
-        animation-name: loss-head;
+        animation-name: loss-root;
         .head {
             @include g.oneshot(1100ms);
             animation-name: loss-head;
@@ -851,6 +854,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         .forearm.front { transform: rotate(158deg); }
         .arm.back { transform: rotate(-84deg); }
         .forearm.back { transform: rotate(-116deg); }
+    }
+    @keyframes loss-root {
+        0%, 100% { transform: translateX(0); }
     }
     @keyframes loss-head {
         0% { transform: rotate(0); }
@@ -990,7 +996,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     /* opp-block: both forearms to guard, held 25-75% */
     .rig.opp-block {
         @include g.oneshot(500ms);
-        animation-name: opp-block-fore-front;
+        animation-name: opp-block-root;
         .forearm.front {
             @include g.oneshot(500ms);
             animation-name: opp-block-fore-front;
@@ -999,6 +1005,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             @include g.oneshot(500ms);
             animation-name: opp-block-fore-back;
         }
+    }
+    @keyframes opp-block-root {
+        0%, 100% { transform: translateX(0); }
     }
     @keyframes opp-block-fore-front {
         0% { transform: rotate(158deg); }
@@ -1014,7 +1023,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     /* opp-taunt-respect-nod: head dip + front glove taps chest (IDK + draw) */
     .rig.opp-taunt-respect-nod {
         @include g.oneshot(700ms);
-        animation-name: opp-nod-head;
+        animation-name: opp-nod-root;
         .head {
             @include g.oneshot(700ms);
             animation-name: opp-nod-head;
@@ -1023,6 +1032,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             @include g.oneshot(700ms);
             animation-name: opp-nod-arm;
         }
+    }
+    @keyframes opp-nod-root {
+        0%, 100% { transform: translateX(0); }
     }
     @keyframes opp-nod-head {
         0%, 30% { transform: rotate(0); }
