@@ -9,9 +9,29 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     import { McatStudyItem_Kind } from "@generated/anki/scheduler_pb";
     import { answerMcatCard } from "@generated/backend";
 
+    import Boxer from "../Boxer.svelte";
+    import type { BoxerAction } from "../boxer";
+
     export let items: McatStudyItem[];
+    export let readinessPct = 50;
 
     const LETTERS = ["A", "B", "C", "D"];
+
+    // A correct MCQ answered within this long counts as "automatic" (a landed
+    // punch); slower-but-correct is a defensive block. Cosmetic only.
+    const FAST_MS = 15000;
+
+    let boxerAction: BoxerAction = "ready";
+    let boxerTrigger = 0;
+    let lastStanceIndex = -1;
+
+    // Hero grows with readiness; opponent size varies per card for variety.
+    $: userScale = 0.9 + Math.max(0, Math.min(100, readinessPct)) / 100 * 0.3;
+    function oppScaleFor(it: McatStudyItem): number {
+        const band = Number(((it.cardId % 5n) + 5n) % 5n); // 0..4, stable per card
+        return 0.85 + (band / 4) * 0.55;
+    }
+    $: oppScale = item ? oppScaleFor(item) : 1;
     // Sentinel choice: never equals a real answer (A–D), so it always grades as
     // incorrect. Lets honest test-takers avoid inflating the score by guessing.
     const IDK = "__idk__";
@@ -27,6 +47,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     $: done = index >= items.length;
     $: correct = chosen !== null && item !== undefined && chosen === item.answer;
 
+    // Resting stance, set once per item: jump-rope on flashcards (training),
+    // guard up on MCQs (the fight). Answer reactions below override until next.
+    $: if (item && index !== lastStanceIndex) {
+        lastStanceIndex = index;
+        boxerAction = isMcq ? "ready" : "jumprope";
+    }
+
     function elapsedMs(): number {
         return Math.min(Date.now() - startedAt, 10 * 60 * 1000);
     }
@@ -37,12 +64,16 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         }
         answering = true;
         chosen = letter;
+        const wasCorrect = letter === item.answer;
+        const wasFast = elapsedMs() <= FAST_MS;
         await answerMcatCard({
             cardId: item.cardId,
-            correct: letter === item.answer,
+            correct: wasCorrect,
             millisecondsTaken: elapsedMs(),
             selfRating: 0,
         });
+        boxerAction = wasCorrect ? (wasFast ? "punch" : "block") : "hit";
+        boxerTrigger += 1;
         answering = false;
     }
 
@@ -58,6 +89,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             millisecondsTaken: elapsedMs(),
             selfRating: 0,
         });
+        boxerAction = "hit";
+        boxerTrigger += 1;
         answering = false;
     }
 
@@ -109,6 +142,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 <svelte:window on:keydown={onKeydown} />
 
 <div class="study-page">
+    <Boxer
+        action={boxerAction}
+        trigger={boxerTrigger}
+        {userScale}
+        {oppScale}
+    />
     {#if done}
         <div class="complete">
             <h1>Session complete</h1>
@@ -136,16 +175,18 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         </div>
 
         {#if isMcq}
-            <div class="card question">
-                {#if item.front}
-                    <p class="stem">{item.front}</p>
-                {/if}
+            <div class="card question" class:answered={chosen !== null}>
                 {#if item.image}
-                    <img src={item.image} alt="question" />
+                    <!-- The imported image is the full question composite (stem +
+                         lettered choices), so it's the source of truth. Rendering
+                         the stem text again would just duplicate it. -->
+                    <div class="qimg"><img src={item.image} alt="question" /></div>
+                {:else if item.front}
+                    <div class="qtext"><p class="stem">{item.front}</p></div>
                 {/if}
             </div>
 
-            <div class="choices">
+            <div class="choices" class:letters={!!item.image}>
                 {#each LETTERS as letter, i (letter)}
                     <button
                         class="choice"
@@ -156,7 +197,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                         on:click={() => chooseLetter(letter)}
                     >
                         <span class="letter">{letter}</span>
-                        {#if item.choices[i]}
+                        {#if !item.image && item.choices[i]}
                             <span class="choice-text">{item.choices[i]}</span>
                         {/if}
                     </button>
@@ -218,15 +259,19 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 <style lang="scss">
     .study-page {
+        height: 100%;
         max-width: 46rem;
         margin: 0 auto;
-        padding: 1.5rem 1.25rem;
+        padding: 0.9rem 1.25rem 1rem;
         display: flex;
         flex-direction: column;
-        gap: 1rem;
+        gap: 0.7rem;
+        overflow: hidden;
+        box-sizing: border-box;
     }
 
     .progress-row {
+        flex-shrink: 0;
         display: flex;
         align-items: center;
         gap: 0.75rem;
@@ -249,7 +294,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     .progress-fill {
         height: 100%;
-        background: var(--mcat-accent, #6366f1);
+        background: linear-gradient(
+            90deg,
+            var(--sf-red-deep, #a3121c),
+            var(--sf-red, #e11d2f)
+        );
         border-radius: 1rem;
         transition: width 0.2s ease;
     }
@@ -261,6 +310,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     .tag-line {
+        flex-shrink: 0;
         display: flex;
         gap: 0.5rem;
         align-items: baseline;
@@ -283,8 +333,58 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         background: var(--canvas-elevated, #fff);
         border: 1px solid var(--border, #ccc);
         border-radius: 0.75rem;
-        padding: 1.25rem;
+        padding: 1rem;
         box-shadow: 0 1px 3px rgb(0 0 0 / 5%);
+    }
+
+    /* Question image fills the leftover height and scales to fit — never
+       forces the page to scroll. */
+    .card.question {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        overflow: hidden;
+    }
+
+    /* Once answered, the image yields room so the explanation + Continue fit. */
+    .card.question.answered {
+        flex: 0 1 34%;
+    }
+
+    /* Text-only questions: scroll inside the card if a stem is unusually long,
+       so the page itself never scrolls. */
+    .card.question .qtext {
+        flex: 1 1 auto;
+        min-height: 0;
+        align-self: stretch;
+        overflow: auto;
+    }
+
+    .card.question .qtext .stem {
+        margin: 0;
+        white-space: pre-wrap;
+        font-size: 1.05rem;
+        line-height: 1.5;
+    }
+
+    /* Fit the question to the available WIDTH so text stays legible. A tall
+       passage then scrolls inside this pane — the page itself still never
+       scrolls, and the choices/Continue below stay pinned in view. */
+    .card.question .qimg {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: auto;
+    }
+
+    .card.question .qimg img {
+        display: block;
+        width: 100%;
+        height: auto;
+        margin: 0 auto;
+        border-radius: 0.5rem;
+        background: #fff;
     }
 
     .card img {
@@ -292,15 +392,58 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         border-radius: 0.5rem;
     }
 
+    .flashcard {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        /* Center vertically when it fits; fall back to top-aligned scroll for
+           long cards so nothing gets clipped. */
+        justify-content: safe center;
+        text-align: center;
+        gap: 0.85rem;
+    }
+
     .flashcard .front {
-        font-size: 1.2rem;
-        font-weight: 600;
+        margin: 0;
+        font-size: 1.35rem;
+        font-weight: 700;
+    }
+
+    .flashcard .back {
+        margin: 0;
+        font-size: 1.05rem;
+        line-height: 1.55;
+        max-width: 34rem;
+    }
+
+    .flashcard hr {
+        width: 60%;
+        margin: 0;
+        border: none;
+        border-top: 1px solid var(--border, #ccc);
     }
 
     .choices {
+        flex-shrink: 0;
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
         gap: 0.5rem;
+    }
+
+    /* When the composite image already lists the options, the answer row is a
+       compact scantron of letters rather than repeating each option's text. */
+    .choices.letters {
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+    .choices.letters .choice {
+        justify-content: center;
+        padding: 0.7rem;
+        font-size: 1.1rem;
+        font-weight: 800;
     }
 
     .choice {
@@ -326,19 +469,29 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     .choice .letter {
         font-weight: 800;
+        color: var(--sf-red, #e11d2f);
     }
 
     .choice.right {
-        border-color: #22c55e;
-        background: color-mix(in srgb, #22c55e 12%, transparent);
+        border-color: #2fd67a;
+        background: color-mix(in srgb, #2fd67a 14%, transparent);
+    }
+
+    .choice.right .letter {
+        color: #2fd67a;
     }
 
     .choice.wrong {
-        border-color: #ef4444;
-        background: color-mix(in srgb, #ef4444 12%, transparent);
+        border-color: #ff5d6c;
+        background: color-mix(in srgb, #ff5d6c 14%, transparent);
+    }
+
+    .choice.wrong .letter {
+        color: #ff5d6c;
     }
 
     .idk {
+        flex-shrink: 0;
         width: 100%;
         padding: 0.6rem 0.8rem;
         border: 1px dashed var(--border, #ccc);
@@ -372,27 +525,54 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         opacity: 1;
     }
 
+    /* Feedback shares the leftover space; the explanation scrolls inside its
+       own box (only if truly long) so the page never scrolls and Continue
+       stays visible. */
     .feedback {
-        border-left: 4px solid #ef4444;
+        flex: 1 1 auto;
+        min-height: 0;
+        border-left: 4px solid #ff5d6c;
         padding: 0.6rem 1rem;
         display: flex;
         flex-direction: column;
         gap: 0.5rem;
+        overflow: hidden;
+    }
+
+    .feedback strong {
+        flex-shrink: 0;
+    }
+
+    .feedback p {
+        flex: 1 1 auto;
+        min-height: 0;
+        margin: 0;
+        overflow: auto;
+        line-height: 1.5;
+    }
+
+    .feedback .primary {
+        flex-shrink: 0;
     }
 
     .feedback.correct {
-        border-color: #22c55e;
+        border-color: #2fd67a;
     }
 
     .primary {
         align-self: flex-start;
-        padding: 0.5rem 1.2rem;
+        padding: 0.5rem 1.3rem;
         border-radius: 0.5rem;
         border: none;
-        background: var(--mcat-accent, #6366f1);
+        background: linear-gradient(
+            180deg,
+            var(--sf-red, #e11d2f) 0%,
+            var(--sf-red-deep, #a3121c) 100%
+        );
         color: var(--mcat-accent-fg, #fff);
-        font-weight: 600;
+        font-weight: 800;
         cursor: pointer;
+        box-shadow: 0 4px 14px rgba(225, 29, 47, 0.3);
         transition: filter 0.12s ease;
     }
 
@@ -405,6 +585,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     .ratings {
+        flex-shrink: 0;
         display: flex;
         gap: 0.5rem;
         justify-content: center;
@@ -436,11 +617,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     .complete {
+        flex: 1 1 auto;
+        min-height: 0;
         text-align: center;
-        padding: 3rem 0;
         display: flex;
         flex-direction: column;
         align-items: center;
+        justify-content: center;
         gap: 0.75rem;
     }
 </style>

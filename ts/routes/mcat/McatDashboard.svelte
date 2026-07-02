@@ -216,15 +216,49 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     .readiness {
+        position: relative;
+        overflow: hidden;
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
-        gap: 2rem;
-        padding: 1.75rem;
-        background: var(--canvas-elevated, #fff);
+        gap: 1.25rem 2rem;
+        padding: 1.75rem 1.9rem;
+        background: linear-gradient(
+            135deg,
+            color-mix(in srgb, var(--sf-red-deep, #a3121c) 28%, var(--canvas-elevated, #161b24))
+                0%,
+            var(--canvas-elevated, #161b24) 55%
+        );
         border: 1px solid var(--border, #ccc);
         border-radius: 1rem;
         margin-bottom: 2rem;
-        box-shadow: 0 1px 3px rgb(0 0 0 / 6%);
+        box-shadow: 0 12px 34px rgb(0 0 0 / 45%);
+    }
+
+    /* judge's scorecard label + ring-corner accent bar (the signature) */
+    .readiness::before {
+        content: "SCORECARD";
+        position: absolute;
+        top: 0.75rem;
+        right: 1.05rem;
+        font-size: 0.62rem;
+        letter-spacing: 0.28em;
+        font-weight: 800;
+        color: var(--sf-dim, #9aa4b6);
+        opacity: 0.7;
+    }
+
+    .readiness::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+        background: linear-gradient(
+            var(--sf-red, #e11d2f),
+            var(--sf-red-deep, #a3121c)
+        );
     }
 
     .score-block {
@@ -236,17 +270,20 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     .score {
-        font-size: 4.25rem;
-        font-weight: 800;
+        font-size: 4.4rem;
+        font-weight: 900;
         line-height: 1;
+        letter-spacing: -0.02em;
         background: linear-gradient(
-            135deg,
-            var(--mcat-accent, #6366f1),
-            color-mix(in srgb, var(--mcat-accent, #6366f1) 55%, #22c55e)
+            140deg,
+            var(--sf-gold, #f5c451) 0%,
+            #fff2cf 42%,
+            var(--sf-red, #e11d2f) 118%
         );
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent;
+        text-shadow: 0 2px 18px rgba(245, 196, 81, 0.12);
     }
 
     .scale {
@@ -255,6 +292,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     .meta {
+        flex: 1 1 12rem;
+        min-width: 0;
         display: flex;
         flex-direction: column;
         gap: 0.35rem;
@@ -268,13 +307,18 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     .actions .primary {
-        padding: 0.6rem 1.4rem;
-        border-radius: 0.5rem;
+        padding: 0.6rem 1.5rem;
+        border-radius: 0.55rem;
         border: none;
-        background: var(--mcat-accent, #6366f1);
+        background: linear-gradient(
+            180deg,
+            var(--sf-red, #e11d2f) 0%,
+            var(--sf-red-deep, #a3121c) 100%
+        );
         color: var(--mcat-accent-fg, #fff);
-        font-weight: 700;
+        font-weight: 800;
         cursor: pointer;
+        box-shadow: 0 4px 14px rgba(225, 29, 47, 0.35);
         transition: filter 0.12s ease;
     }
 
@@ -424,7 +468,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     .conf-breakdown {
         display: flex;
-        gap: 1rem;
+        flex-wrap: wrap;
+        gap: 0.35rem 1rem;
         font-size: 0.8rem;
         opacity: 0.7;
     }
@@ -486,16 +531,19 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     .gate {
-        font-size: 0.7rem;
-        padding: 0.05rem 0.4rem;
+        font-size: 0.66rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        padding: 0.08rem 0.45rem;
         border-radius: 1rem;
-        background: color-mix(in srgb, red 15%, transparent);
-        color: #b00;
+        background: color-mix(in srgb, var(--sf-red, #e11d2f) 16%, transparent);
+        color: #ff8088;
     }
 
     .gate.open {
-        background: color-mix(in srgb, green 15%, transparent);
-        color: #080;
+        background: color-mix(in srgb, var(--sf-gold, #f5c451) 15%, transparent);
+        color: var(--sf-gold, #f5c451);
     }
 
     .bar-row {
@@ -525,11 +573,15 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     .fill.fluency {
-        background: var(--mcat-accent, #6366f1);
+        background: linear-gradient(
+            90deg,
+            var(--sf-red-deep, #a3121c),
+            var(--sf-red, #e11d2f)
+        );
     }
 
     .fill.application {
-        background: #22c55e;
+        background: linear-gradient(90deg, #b8860b, var(--sf-gold, #f5c451));
     }
 
     .bar-val {

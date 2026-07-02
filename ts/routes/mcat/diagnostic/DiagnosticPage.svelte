@@ -11,9 +11,30 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     } from "@generated/anki/scheduler_pb";
     import { answerMcatCard, recomputeMcatLeafStates } from "@generated/backend";
 
+    import Boxer from "../Boxer.svelte";
+    import type { BoxerAction } from "../boxer";
+
     export let items: McatStudyItem[];
 
     const LETTERS = ["A", "B", "C", "D"];
+
+    // During the exam the hero works a heavy bag: every answer lands a punch
+    // (the ring cycles jab/cross/hook/uppercut for variety). Because it's the
+    // same event regardless of correctness, it never leaks the answer — the
+    // PRD's no-mid-exam-feedback rule holds. The two-fighter outcome still plays
+    // on the results screen.
+    let boxerAction: BoxerAction = "ready";
+    let boxerTrigger = 0;
+    $: boxerMode = phase === "exam" ? "bag" : "spar";
+
+    $: userScale = readiness
+        ? 0.9 + Math.max(0, Math.min(100, readiness.readinessPct)) / 100 * 0.3
+        : 1;
+    function oppScaleFor(it: McatStudyItem): number {
+        const bandRaw = Number(((it.cardId % 5n) + 5n) % 5n); // 0..4, stable
+        return 0.85 + (bandRaw / 4) * 0.55;
+    }
+    $: oppScale = item ? oppScaleFor(item) : 1.1;
     // Sentinel choice: never equals a real answer (A–D), so it always grades as
     // incorrect. Lets honest test-takers avoid inflating the score by guessing.
     const IDK = "__idk__";
@@ -53,6 +74,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         }
         perSection.set(item.section, bucket);
 
+        // Land a punch on the bag for every answer (the ring varies which one).
+        boxerAction = "punch";
+        boxerTrigger += 1;
+
         const ms = Math.min(Date.now() - startedAt, 10 * 60 * 1000);
         // fire-and-forget scoring; no feedback is shown mid-exam
         void answerMcatCard({
@@ -74,6 +99,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     async function finish(): Promise<void> {
         phase = "submitting";
+        boxerAction = "idle";
         // wait for the in-flight answer writes to land, then recompute
         const started = Date.now();
         while (submittedCount < total && Date.now() - started < 30_000) {
@@ -81,6 +107,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         }
         readiness = await recomputeMcatLeafStates({});
         phase = "results";
+        // Single outcome flourish, framed positively even when the score is low
+        // (productive failure -> back to training).
+        const pct = readiness.readinessPct;
+        boxerAction = pct >= 60 ? "punch" : pct >= 40 ? "block" : "jumprope";
+        boxerTrigger += 1;
     }
 
     function onKeydown(event: KeyboardEvent): void {
@@ -106,6 +137,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 <svelte:window on:keydown={onKeydown} />
 
 <div class="diagnostic">
+    <Boxer
+        action={boxerAction}
+        trigger={boxerTrigger}
+        mode={boxerMode}
+        {userScale}
+        {oppScale}
+    />
     {#if phase === "intro"}
         <div class="panel intro">
             <h1>Diagnostic exam</h1>
@@ -141,19 +179,21 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         </header>
 
         <div class="card question">
-            {#if item.front}
-                <p class="stem">{item.front}</p>
-            {/if}
             {#if item.image}
-                <img src={item.image} alt="question" />
+                <!-- The imported image is the full question composite (stem +
+                     lettered choices), so it's the source of truth; the text stem
+                     would only duplicate it. -->
+                <div class="qimg"><img src={item.image} alt="question" /></div>
+            {:else if item.front}
+                <div class="qtext"><p class="stem">{item.front}</p></div>
             {/if}
         </div>
 
-        <div class="choices">
+        <div class="choices" class:letters={!!item.image}>
             {#each LETTERS as letter (letter)}
                 <button class="choice" on:click={() => choose(letter)}>
                     <span class="letter">{letter}</span>
-                    {#if item.choices[LETTERS.indexOf(letter)]}
+                    {#if !item.image && item.choices[LETTERS.indexOf(letter)]}
                         <span class="choice-text">
                             {item.choices[LETTERS.indexOf(letter)]}
                         </span>
@@ -209,20 +249,28 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 <style lang="scss">
     .diagnostic {
+        height: 100%;
         max-width: 46rem;
         margin: 0 auto;
-        padding: 1.25rem;
+        padding: 0.9rem 1.25rem 1rem;
         font-family: var(--mcat-font, system-ui, sans-serif);
         display: flex;
         flex-direction: column;
-        gap: 1rem;
+        gap: 0.75rem;
+        overflow: hidden;
+        box-sizing: border-box;
     }
 
+    /* Each phase panel fills the leftover height; if a panel is unusually tall
+       it scrolls inside its own box so the page itself never scrolls. */
     .panel {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: auto;
         background: var(--canvas-elevated, #fff);
         border: 1px solid var(--border, #ccc);
         border-radius: 0.9rem;
-        padding: 1.75rem;
+        padding: 1.5rem;
         display: flex;
         flex-direction: column;
         gap: 0.9rem;
@@ -246,6 +294,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     .progress-row {
+        flex-shrink: 0;
         display: flex;
         align-items: center;
         gap: 0.75rem;
@@ -268,7 +317,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     .progress-fill {
         height: 100%;
-        background: var(--mcat-accent, #3b82f6);
+        background: linear-gradient(
+            90deg,
+            var(--sf-red-deep, #a3121c),
+            var(--sf-red, #e11d2f)
+        );
         border-radius: 1rem;
         transition: width 0.2s ease;
     }
@@ -283,8 +336,52 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         background: var(--canvas-elevated, #fff);
         border: 1px solid var(--border, #ccc);
         border-radius: 0.75rem;
-        padding: 1.25rem;
+        padding: 1rem;
         box-shadow: 0 1px 3px rgb(0 0 0 / 5%);
+    }
+
+    /* Question image fills leftover height and scales to fit — no page scroll. */
+    .card.question {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        overflow: hidden;
+    }
+
+    /* Text-only questions scroll inside the card if the stem is very long, so
+       the page itself never scrolls. */
+    .card.question .qtext {
+        flex: 1 1 auto;
+        min-height: 0;
+        align-self: stretch;
+        overflow: auto;
+    }
+
+    .card.question .qtext .stem {
+        margin: 0;
+        white-space: pre-wrap;
+        font-size: 1.05rem;
+        line-height: 1.5;
+    }
+
+    /* Fit the question to the available WIDTH so text stays legible. A tall
+       passage then scrolls inside this pane — the page itself still never
+       scrolls, and the choices below stay pinned in view. */
+    .card.question .qimg {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: auto;
+    }
+
+    .card.question .qimg img {
+        display: block;
+        width: 100%;
+        height: auto;
+        margin: 0 auto;
+        border-radius: 0.5rem;
+        background: #fff;
     }
 
     .card img {
@@ -297,9 +394,23 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     .choices {
+        flex-shrink: 0;
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
         gap: 0.5rem;
+    }
+
+    /* When the composite image already lists the options, the answer row is a
+       compact scantron of letters rather than repeating each option's text. */
+    .choices.letters {
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+    .choices.letters .choice {
+        justify-content: center;
+        padding: 0.7rem;
+        font-size: 1.1rem;
+        font-weight: 800;
     }
 
     .choice {
@@ -325,9 +436,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     .choice .letter {
         font-weight: 800;
+        color: var(--sf-red, #e11d2f);
     }
 
     .idk {
+        flex-shrink: 0;
         width: 100%;
         margin-top: 0.15rem;
         padding: 0.7rem 0.9rem;
@@ -359,8 +472,18 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     .results .score {
         font-size: 3.5rem;
-        font-weight: 800;
+        font-weight: 900;
         line-height: 1;
+        letter-spacing: -0.02em;
+        background: linear-gradient(
+            140deg,
+            var(--sf-gold, #f5c451) 0%,
+            #fff2cf 42%,
+            var(--sf-red, #e11d2f) 118%
+        );
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
     }
 
     .results .scale {
@@ -395,7 +518,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     .fill {
         height: 100%;
-        background: var(--mcat-accent, #3b82f6);
+        background: linear-gradient(
+            90deg,
+            var(--sf-red-deep, #a3121c),
+            var(--sf-red, #e11d2f)
+        );
     }
 
     .section-val {
@@ -411,13 +538,18 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     .primary {
-        padding: 0.6rem 1.4rem;
-        border-radius: 0.5rem;
+        padding: 0.6rem 1.5rem;
+        border-radius: 0.55rem;
         border: none;
-        background: var(--mcat-accent, #3b82f6);
+        background: linear-gradient(
+            180deg,
+            var(--sf-red, #e11d2f) 0%,
+            var(--sf-red-deep, #a3121c) 100%
+        );
         color: white;
-        font-weight: 700;
+        font-weight: 800;
         cursor: pointer;
+        box-shadow: 0 4px 14px rgba(225, 29, 47, 0.3);
     }
 
     .secondary {

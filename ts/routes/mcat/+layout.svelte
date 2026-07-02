@@ -17,9 +17,35 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 <div class="mcat-shell">
     <nav class="mcat-nav">
-        <button class="brand" on:click={() => goto("/mcat")}>
-            <span class="glove">🥊</span>
-            <span class="wordmark">MCAT&nbsp;Speedrun</span>
+        <button
+            class="brand"
+            on:click={() => goto("/mcat")}
+            aria-label="Scorefighter home"
+        >
+            <svg class="glove-mark" viewBox="0 0 48 48" aria-hidden="true">
+                <g fill="currentColor">
+                    <path
+                        d="M17 40V27a11 11 0 0 1 11-11h1a10 10 0 0 1 10 10v3a11 11 0 0 1-11 11z"
+                    />
+                    <circle cx="13.5" cy="25" r="7.5" />
+                    <path d="M16 27h23v7a5 5 0 0 1-5 5H21a5 5 0 0 1-5-5z" />
+                </g>
+                <path
+                    fill="none"
+                    stroke="rgba(0,0,0,.22)"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    d="M19 24.5c3.5 2 7.5 2 11 0"
+                />
+                <path
+                    fill="none"
+                    stroke="rgba(0,0,0,.22)"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    d="M24 30.5l4 4m0-4l-4 4"
+                />
+            </svg>
+            <span class="wordmark">Score<b>fighter</b></span>
         </button>
         <div class="links">
             {#each links as link (link.href)}
@@ -40,46 +66,92 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 <style lang="scss">
     .mcat-shell {
-        --mcat-accent: #6366f1;
+        /* Fight Night palette — kept self-contained so Scorefighter reads the
+           same regardless of Anki's active light/dark theme. */
+        --sf-canvas: #0d0f14;
+        --sf-surface: #161b24;
+        --sf-surface-2: #1f2632;
+        --sf-border: #2a3242;
+        --sf-text: #eef1f6;
+        --sf-dim: #9aa4b6;
+        --sf-red: #e11d2f;
+        --sf-red-deep: #a3121c;
+        --sf-gold: #f5c451;
+
+        /* Remap the Anki theme tokens the child screens consume so they inherit
+           the dark boxing surfaces without touching every rule. */
+        --canvas: var(--sf-canvas);
+        --canvas-elevated: var(--sf-surface);
+        --border: var(--sf-border);
+        --border-subtle: var(--sf-border);
+        --fg: var(--sf-text);
+        --mcat-accent: var(--sf-red);
         --mcat-accent-fg: #ffffff;
-        min-height: 100vh;
-        background: var(--canvas, #f6f7fb);
-        color: var(--fg, #1a1a1a);
-        font-family:
-            "Inter",
-            system-ui,
-            -apple-system,
-            sans-serif;
+        --mcat-font: "Inter", system-ui, -apple-system, sans-serif;
+
+        /* App-shell: the shell owns the viewport height and the content area
+           holds any scrolling, so the nav stays pinned. Study/Diagnostic fit
+           inside the content area without scrolling; the dashboard scrolls
+           within it. */
+        display: flex;
+        flex-direction: column;
+        height: 100dvh;
+        overflow: hidden;
+        background: radial-gradient(
+            1100px 700px at 78% -12%,
+            #16141c 0%,
+            var(--sf-canvas) 58%
+        );
+        color: var(--sf-text);
+        font-family: var(--mcat-font);
     }
 
     .mcat-nav {
-        position: sticky;
-        top: 0;
+        flex-shrink: 0;
         z-index: 10;
         display: flex;
         align-items: center;
         gap: 1rem;
-        padding: 0.6rem 1.25rem;
-        background: var(--canvas-elevated, #fff);
-        border-bottom: 1px solid var(--border, #e3e3e8);
-        backdrop-filter: blur(6px);
+        padding: 0.7rem 1.25rem;
+        background: color-mix(in srgb, var(--sf-surface) 92%, transparent);
+        border-bottom: 1px solid var(--sf-border);
+        /* thin "ring rope" accent line under the bar */
+        box-shadow:
+            0 2px 0 0 var(--sf-red),
+            0 3px 0 0 var(--sf-canvas),
+            0 4px 0 0 color-mix(in srgb, var(--sf-red) 45%, transparent);
+        backdrop-filter: blur(8px);
     }
 
     .brand {
         display: flex;
         align-items: center;
-        gap: 0.45rem;
+        gap: 0.55rem;
         border: none;
         background: none;
         cursor: pointer;
-        font-weight: 800;
-        font-size: 1.05rem;
-        color: inherit;
-        letter-spacing: -0.01em;
+        padding: 0;
     }
 
-    .glove {
-        font-size: 1.2rem;
+    .glove-mark {
+        width: 26px;
+        height: 26px;
+        color: var(--sf-red);
+        filter: drop-shadow(0 1px 2px rgba(225, 29, 47, 0.35));
+    }
+
+    .wordmark {
+        font-weight: 900;
+        font-size: 1.12rem;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        color: var(--sf-text);
+        line-height: 1;
+    }
+
+    .wordmark b {
+        color: var(--sf-red);
+        font-weight: 900;
     }
 
     .links {
@@ -92,29 +164,30 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         border: none;
         background: none;
         cursor: pointer;
-        color: inherit;
-        opacity: 0.65;
+        color: var(--sf-dim);
         font-weight: 600;
-        font-size: 0.92rem;
-        padding: 0.4rem 0.8rem;
+        font-size: 0.9rem;
+        padding: 0.4rem 0.85rem;
         border-radius: 0.5rem;
         transition:
             background 0.12s ease,
-            opacity 0.12s ease;
+            color 0.12s ease;
     }
 
     .nav-link:hover {
-        opacity: 1;
-        background: color-mix(in srgb, var(--mcat-accent) 10%, transparent);
+        color: var(--sf-text);
+        background: color-mix(in srgb, var(--sf-red) 12%, transparent);
     }
 
     .nav-link.active {
-        opacity: 1;
-        color: var(--mcat-accent);
-        background: color-mix(in srgb, var(--mcat-accent) 14%, transparent);
+        color: #fff;
+        background: color-mix(in srgb, var(--sf-red) 22%, transparent);
     }
 
     .mcat-content {
-        display: block;
+        flex: 1;
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
     }
 </style>

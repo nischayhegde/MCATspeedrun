@@ -9,4 +9,4 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     export let data: PageData;
 </script>
 
-<StudyPage items={data.queue.items} />
+<StudyPage items={data.queue.items} readinessPct={data.readiness.readinessPct} />
