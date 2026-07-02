@@ -271,7 +271,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .texture-fur,
     .texture-crack {
         fill: none;
-        stroke: rgb(0 0 0 / 35%);
+        stroke: rgb(0 0 0 / 55%);
         stroke-width: 1.2;
         stroke-linecap: round;
     }
