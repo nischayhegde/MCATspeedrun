@@ -94,10 +94,59 @@ turn FightEvents into scheduled clips, then plays them out on timers.
     </div>
 {:else}
     <div class="sf-ring" style="height:{height}px">
-        <div class="ropes" aria-hidden="true"></div>
-        <div class="floor" aria-hidden="true"></div>
-        <div class="post l" aria-hidden="true"></div>
-        <div class="post r" aria-hidden="true"></div>
+        <svg class="dressing" viewBox="0 0 700 110" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+                <radialGradient id="sf-ring-spot" cx="50%" cy="-10%" r="95%">
+                    <stop offset="0" stop-color="#2e2216" />
+                    <stop offset="45%" stop-color="#15171d" />
+                    <stop offset="100%" stop-color="#08090c" />
+                </radialGradient>
+                <linearGradient id="sf-ring-floor" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#20242f" />
+                    <stop offset="1" stop-color="#0a0c10" />
+                </linearGradient>
+                <linearGradient id="sf-ring-rope-red" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#ff8a7a" />
+                    <stop offset="0.5" stop-color="#c81e2c" />
+                    <stop offset="1" stop-color="#6e0f16" />
+                </linearGradient>
+                <linearGradient id="sf-ring-rope-gold" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#ffe9ad" />
+                    <stop offset="0.5" stop-color="#f5c451" />
+                    <stop offset="1" stop-color="#a3792b" />
+                </linearGradient>
+                <linearGradient id="sf-ring-post" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0" stop-color="#3a4358" />
+                    <stop offset="0.5" stop-color="#1c2230" />
+                    <stop offset="1" stop-color="#0c0f16" />
+                </linearGradient>
+                <filter id="sf-ring-glow"><feGaussianBlur stdDeviation="9" /></filter>
+            </defs>
+            <rect width="700" height="110" fill="url(#sf-ring-spot)" />
+            <g filter="url(#sf-ring-glow)" opacity="0.35">
+                <circle cx="90" cy="8" r="14" fill="#f5c451" />
+                <circle cx="240" cy="4" r="10" fill="#ff5d6c" />
+                <circle cx="470" cy="6" r="12" fill="#f5c451" />
+                <circle cx="620" cy="4" r="9" fill="#8fb6ff" />
+            </g>
+            <rect y="52" width="700" height="58" fill="url(#sf-ring-floor)" />
+            <circle cx="350" cy="82" r="20" fill="none" stroke="#f5c451" stroke-width="1.2" opacity="0.22" />
+            <text x="350" y="89" text-anchor="middle" font-family="Georgia, serif" font-size="18" fill="#f5c451" opacity="0.2" font-weight="700">S</text>
+            <g stroke="#232834" stroke-width="1" opacity="0.5">
+                <line x1="0" y1="62" x2="700" y2="62" />
+                <line x1="0" y1="74" x2="700" y2="74" />
+                <line x1="0" y1="86" x2="700" y2="86" />
+                <line x1="0" y1="98" x2="700" y2="98" />
+            </g>
+            <ellipse cx="350" cy="66" rx="260" ry="16" fill="#f5c451" opacity="0.09" />
+            <rect x="14" y="6" width="10" height="96" rx="4" fill="url(#sf-ring-post)" />
+            <rect x="676" y="6" width="10" height="96" rx="4" fill="url(#sf-ring-post)" />
+            <circle cx="19" cy="8" r="8" fill="url(#sf-ring-rope-gold)" />
+            <circle cx="681" cy="8" r="8" fill="url(#sf-ring-rope-gold)" />
+            <path d="M14,20 Q350,32 686,20" fill="none" stroke="url(#sf-ring-rope-gold)" stroke-width="6" stroke-linecap="round" />
+            <path d="M14,38 Q350,52 686,38" fill="none" stroke="url(#sf-ring-rope-red)" stroke-width="6" stroke-linecap="round" />
+            <path d="M14,56 Q350,70 686,56" fill="none" stroke="url(#sf-ring-rope-gold)" stroke-width="6" stroke-linecap="round" />
+        </svg>
         <button class="sf-hide" on:click={toggle} title="Hide the ring">✕</button>
 
         {#if marquee}
@@ -155,51 +204,12 @@ turn FightEvents into scheduled clips, then plays them out on timers.
         border: 1px solid var(--sf-border);
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), var(--sf-shadow-2);
     }
-    .floor {
+    .dressing {
         position: absolute;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        height: 42%;
-        background: repeating-linear-gradient(90deg, #12161f 0 26px, #0f131b 26px 52px);
-        border-top: 2px solid #262d3b;
-        box-shadow: inset 0 10px 22px rgba(0, 0, 0, 0.45);
-    }
-    .ropes {
-        position: absolute;
-        left: 0;
-        right: 0;
-        top: 16%;
-        height: 40%;
-        background:
-            linear-gradient(transparent 0 34%, rgba(245, 196, 81, 0.16) 34% 37%, transparent 37%),
-            linear-gradient(transparent 0 66%, rgba(225, 29, 47, 0.16) 66% 69%, transparent 69%);
-    }
-    .post {
-        position: absolute;
-        top: 10%;
-        bottom: 16%;
-        width: 5px;
-        border-radius: 3px;
-        background: linear-gradient(180deg, #2c3444, #1b2130);
-        box-shadow: 0 0 0 1px #05070c;
-        &::before {
-            content: "";
-            position: absolute;
-            top: -4px;
-            left: -2px;
-            right: -2px;
-            height: 6px;
-            border-radius: 3px;
-            background: var(--sf-gold);
-            box-shadow: 0 0 0 1px #05070c;
-        }
-        &.l {
-            left: 10px;
-        }
-        &.r {
-            right: 10px;
-        }
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
     }
     .stage {
         position: absolute;
