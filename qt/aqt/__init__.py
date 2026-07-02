@@ -110,21 +110,17 @@ import aqt.forms
 # - make preferences modal? cmd+q does wrong thing
 
 
-from aqt import addcards, addons, browser, editcurrent, filtered_deck  # isort:skip
-from aqt import stats, about, preferences, mediasync  # isort:skip
+from aqt import addons, filtered_deck  # isort:skip
+from aqt import about, mediasync  # isort:skip
 
 
 class DialogManager:
+    # MCAT fork: the legacy AddCards/Browser/EditCurrent/DeckStats/NewDeckStats/
+    # Preferences screens are removed (superseded by the MCAT SvelteKit app).
     _dialogs: dict[str, list] = {
-        "AddCards": [addcards.AddCards, None],
         "AddonsDialog": [addons.AddonsDialog, None],
-        "Browser": [browser.Browser, None],
-        "EditCurrent": [editcurrent.EditCurrent, None],
         "FilteredDeckConfigDialog": [filtered_deck.FilteredDeckConfigDialog, None],
-        "DeckStats": [stats.DeckStats, None],
-        "NewDeckStats": [stats.NewDeckStats, None],
         "About": [about.show, None],
-        "Preferences": [preferences.Preferences, None],
         "sync_log": [mediasync.MediaSyncDialog, None],
     }
 

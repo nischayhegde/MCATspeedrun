@@ -240,14 +240,10 @@ class AnkiQt(QMainWindow):
         self.setup_focus()
         # screens
         self.setupDeckBrowser()
-        self.setupOverview()
-        self.setupReviewer()
 
     def finish_ui_setup(self) -> None:
         "Actions that are deferred until after add-on loading."
         self.toolbar.draw()
-        # add-ons are only available here after setupAddons
-        gui_hooks.reviewer_did_init(self.reviewer)
 
     def setupProfileAfterWebviewsLoaded(self) -> None:
         for w in (self.web, self.bottomWeb):
@@ -506,7 +502,7 @@ class AnkiQt(QMainWindow):
         restoreGeom(self, "mainWindow")
         restoreState(self, "mainWindow")
         # titlebar
-        self.setWindowTitle(f"{self.pm.name} - Anki")
+        self.setWindowTitle(f"{self.pm.name} - Scorefighter")
         # show and raise window for osx
         self.show()
         self.activateWindow()
@@ -531,15 +527,9 @@ class AnkiQt(QMainWindow):
         last_day_cutoff = self.col.sched.day_cutoff
 
         def refresh_reviewer_on_day_rollover_change():
-            from aqt.reviewer import RefreshNeeded
-
             # need to refresh?
             nonlocal last_day_cutoff
             current_cutoff = self.col.sched.day_cutoff
-            if self.state == "review" and last_day_cutoff != current_cutoff:
-                last_day_cutoff = self.col.sched.day_cutoff
-                self.reviewer._refresh_needed = RefreshNeeded.QUEUES
-                self.reviewer.refresh_if_needed()
             if last_day_cutoff != current_cutoff:
                 gui_hooks.day_did_change()
 
@@ -779,40 +769,6 @@ class AnkiQt(QMainWindow):
             return None
         return self.col.decks.get(did)
 
-    def _overviewState(self, oldState: MainWindowState) -> None:
-        if not self._selectedDeck():
-            return self.moveToState("deckBrowser")
-        self.overview.show()
-
-    def _reviewState(self, oldState: MainWindowState) -> None:
-        self.reviewer.show()
-
-        fullscreen_was_checked = False
-
-        if self.pm.hide_top_bar():
-            self.toolbarWeb.hide_timer.setInterval(500)
-            self.toolbarWeb.hide_timer.start()
-
-            # check the `hide_if_allowed` method in `qt/aqt/toolbar.py`
-            fullscreen_was_checked = True
-        else:
-            self.toolbarWeb.flatten()
-
-        if not fullscreen_was_checked and self.fullscreen:
-            self.hide_menubar()
-
-        if self.pm.hide_bottom_bar():
-            self.bottomWeb.hide_timer.setInterval(500)
-            self.bottomWeb.hide_timer.start()
-
-    def _reviewCleanup(self, newState: MainWindowState) -> None:
-        if newState not in {"resetRequired", "review"}:
-            self.reviewer.auto_advance_enabled = False
-            self.reviewer.cleanup()
-            self.toolbarWeb.elevate()
-            self.toolbarWeb.show()
-            self.bottomWeb.show()
-
     # Resetting state
     ##########################################################################
 
@@ -842,11 +798,7 @@ class AnkiQt(QMainWindow):
     ) -> None:
         "Notify current screen of changes."
         focused = current_window() == self
-        if self.state == "review":
-            dirty = self.reviewer.op_executed(changes, handler, focused)
-        elif self.state == "overview":
-            dirty = self.overview.op_executed(changes, handler, focused)
-        elif self.state == "deckBrowser":
+        if self.state == "deckBrowser":
             dirty = self.deckBrowser.op_executed(changes, handler, focused)
         else:
             dirty = False
@@ -865,11 +817,7 @@ class AnkiQt(QMainWindow):
     ) -> None:
         "If main window has received focus, ensure current UI state is updated."
         if new_focus and new_focus.window() == self:
-            if self.state == "review":
-                self.reviewer.refresh_if_needed()
-            elif self.state == "overview":
-                self.overview.refresh_if_needed()
-            elif self.state == "deckBrowser":
+            if self.state == "deckBrowser":
                 self.deckBrowser.refresh_if_needed()
 
     def fade_out_webview(self) -> None:
@@ -1075,16 +1023,6 @@ title="{}" {}>{}</button>""".format(
 
         self.deckBrowser = DeckBrowser(self)
 
-    def setupOverview(self) -> None:
-        from aqt.overview import Overview
-
-        self.overview = Overview(self)
-
-    def setupReviewer(self) -> None:
-        from aqt.reviewer import Reviewer
-
-        self.reviewer = Reviewer(self)
-
     # Syncing
     ##########################################################################
 
@@ -1180,11 +1118,6 @@ title="{}" {}>{}</button>""".format(
         globalShortcuts = [
             ("Ctrl+:", show_debug_console),
             ("d", lambda: self.moveToState("deckBrowser")),
-            ("s", self.onStudyKey),
-            ("a", self.onAddCard),
-            ("b", self.onBrowse),
-            ("t", self.onStats),
-            ("Shift+t", self.onStats),
             ("y", self.on_sync_button_clicked),
         ]
         self.applyShortcuts(globalShortcuts)
@@ -1237,13 +1170,6 @@ title="{}" {}>{}</button>""".format(
         for qs in self.stateShortcuts:
             sip.delete(qs)  # type: ignore
         self.stateShortcuts = []
-
-    def onStudyKey(self) -> None:
-        if self.state == "overview":
-            self.col.startTimebox()
-            self.moveToState("review")
-        else:
-            self.moveToState("overview")
 
     # App exit
     ##########################################################################
@@ -1302,31 +1228,6 @@ title="{}" {}>{}</button>""".format(
     # Other menu operations
     ##########################################################################
 
-    def onAddCard(self) -> None:
-        aqt.dialogs.open("AddCards", self)
-
-    def onBrowse(self) -> None:
-        aqt.dialogs.open("Browser", self, card=self.reviewer.card)
-
-    def onEditCurrent(self) -> None:
-        aqt.dialogs.open("EditCurrent", self)
-
-    def onOverview(self) -> None:
-        self.moveToState("overview")
-
-    def onStats(self) -> None:
-        deck = self._selectedDeck()
-        if not deck:
-            return
-        want_old = KeyboardModifiersPressed().shift
-        if want_old:
-            aqt.dialogs.open("DeckStats", self)
-        else:
-            aqt.dialogs.open("NewDeckStats", self)
-
-    def onPrefs(self) -> None:
-        aqt.dialogs.open("Preferences", self)
-
     def on_check_for_updates(self) -> None:
         from packaging.version import Version
 
@@ -1344,11 +1245,6 @@ title="{}" {}>{}</button>""".format(
             parent=self, include_prerelease=version.is_prerelease, on_success=on_success
         ).with_progress().run_in_background()
 
-    def onNoteTypes(self) -> None:
-        import aqt.models
-
-        aqt.models.Models(self, self, fromMain=True)
-
     def onAbout(self) -> None:
         aqt.dialogs.open("About", self)
 
@@ -1357,11 +1253,6 @@ title="{}" {}>{}</button>""".format(
 
     def onDocumentation(self) -> None:
         openHelp(HelpPage.INDEX)
-
-    # legacy
-
-    def onDeckConf(self, deck: DeckDict | None = None) -> None:
-        pass
 
     # Importing & exporting
     ##########################################################################
@@ -1425,6 +1316,17 @@ title="{}" {}>{}</button>""".format(
     def onCram(self) -> None:
         aqt.dialogs.open("FilteredDeckConfigDialog", self)
 
+    # Preferences & note types
+    ##########################################################################
+
+    def onPrefs(self) -> None:
+        aqt.dialogs.open("Preferences", self)
+
+    def onNoteTypes(self) -> None:
+        import aqt.models
+
+        aqt.models.Models(self, self, fromMain=True)
+
     # Menu, title bar & status
     ##########################################################################
 
@@ -1479,7 +1381,7 @@ title="{}" {}>{}</button>""".format(
         m.actionFullScreen.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
 
     def updateTitleBar(self) -> None:
-        self.setWindowTitle("Anki")
+        self.setWindowTitle("Scorefighter")
 
     # View
     ##########################################################################
@@ -1554,8 +1456,6 @@ title="{}" {}>{}</button>""".format(
     def onRefreshTimer(self) -> None:
         if self.state == "deckBrowser":
             self.deckBrowser.refresh()
-        elif self.state == "overview":
-            self.overview.refresh()
 
     def on_periodic_sync_timer(self) -> None:
         elap = self.media_syncer.seconds_since_last_sync()

@@ -12,14 +12,18 @@ fn recency_weight(age_days: f32) -> f32 {
     (-age_days.max(0.0) / RECENCY_TAU_DAYS).exp()
 }
 
-/// 1.0 fast, 0.0 slow, 0.4 in between.
+/// Speed credit for a recall: 1.0 at/below the fast threshold, 0.0 at/above
+/// slow, linear in between. Automaticity evidence is continuous — a recall
+/// just over the fast threshold is far stronger evidence than one just under
+/// slow, and a step function would cap fluency for anyone answering at a
+/// normal (Good) pace.
 fn fastness(ms: u32, t: Latency) -> f32 {
     if ms <= t.fast {
         1.0
     } else if ms >= t.slow {
         0.0
     } else {
-        0.4
+        (t.slow - ms) as f32 / (t.slow - t.fast) as f32
     }
 }
 
@@ -118,7 +122,7 @@ pub fn score_leaf(leaf: &Leaf, reviews: &[Review], rote: &[RoteMemory], now_ms: 
         if !r.correct {
             return 0.0;
         }
-        if fastness(r.ms, r.latency) >= 0.5 {
+        if r.ms <= r.latency.fast {
             1.0
         } else {
             0.7
@@ -126,14 +130,16 @@ pub fn score_leaf(leaf: &Leaf, reviews: &[Review], rote: &[RoteMemory], now_ms: 
     });
     let application_demonstrated = app_reviews.iter().any(|r| r.correct);
 
-    // fluency: durability + automaticity; demonstrated application implies fluency
+    // fluency: durability + automaticity; demonstrated application implies
+    // fluency — at least the floor, tracking the application score above it
+    // so an application-strong leaf isn't pinned at the floor forever
     let mut fluency = if leaf.is_cars {
         0.0
     } else {
         clamp01(0.5 * durability + 0.5 * automaticity)
     };
     if !leaf.is_cars && application_demonstrated {
-        fluency = fluency.max(0.8);
+        fluency = fluency.max(APP_FLUENCY_FLOOR.max(application));
     }
 
     // demotion: latest evidence is a genuine (post-learning) lapse -> gate closes
@@ -248,6 +254,48 @@ mod tests {
         let s = score_leaf(&l, &reviews, &rote, NOW);
         assert!(!s.gate_open, "fluency was {}", s.fluency);
         assert!(s.assessed);
+    }
+
+    #[test]
+    fn mid_speed_recalls_earn_partial_automaticity() {
+        // fastness is a continuous ramp, not a 0.4 step: a spaced 7s recall on
+        // a well-retained leaf must read well above the old ~0.65 ceiling
+        let l = leaf("1A").unwrap();
+        let reviews = vec![rote_review(5, true, 7_000, false)];
+        let rote = vec![RoteMemory {
+            retrievability_now: 0.9,
+            reps: 3,
+        }];
+        let s = score_leaf(&l, &reviews, &rote, NOW);
+        assert!(s.fluency > 0.85, "fluency was {}", s.fluency);
+    }
+
+    #[test]
+    fn strong_application_lifts_fluency_above_the_floor() {
+        // implied fluency tracks the application score instead of pinning at
+        // exactly 0.8 forever
+        let l = leaf("1B").unwrap();
+        let reviews = vec![
+            app_review(10, true, 30_000, false),
+            app_review(5, true, 30_000, false),
+            app_review(1, true, 30_000, false),
+        ];
+        let s = score_leaf(&l, &reviews, &[], NOW);
+        assert!(s.application > 0.95, "application was {}", s.application);
+        assert!(s.fluency > 0.95, "fluency was {}", s.fluency);
+    }
+
+    #[test]
+    fn weak_demonstrated_application_keeps_the_fluency_floor() {
+        // one correct among misses: the PRD floor holds, but no more
+        let l = leaf("1B").unwrap();
+        let reviews = vec![
+            app_review(10, true, 30_000, false),
+            app_review(1, false, 130_000, false),
+        ];
+        let s = score_leaf(&l, &reviews, &[], NOW);
+        assert!(s.application < 0.5, "application was {}", s.application);
+        assert!((s.fluency - 0.8).abs() < 1e-6, "fluency was {}", s.fluency);
     }
 
     #[test]

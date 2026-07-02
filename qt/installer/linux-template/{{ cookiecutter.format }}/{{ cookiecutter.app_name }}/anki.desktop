@@ -1,7 +1,7 @@
 [Desktop Entry]
-Name=Anki
-Comment=An intelligent spaced-repetition memory training program
-GenericName=Flashcards
+Name=Scorefighter
+Comment=Boxing-themed MCAT study and readiness training
+GenericName=MCAT trainer
 Exec=anki %f
 TryExec=anki
 Icon=anki

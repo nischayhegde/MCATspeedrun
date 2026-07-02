@@ -223,9 +223,16 @@ pub const APP_SPACING_FULL_DAYS: f32 = 1.0; // leaf-level application gap ditto
 pub const APP_SPACING_FLOOR: f32 = 0.3; // same-day fresh problems still count some
 pub const SPACED_CORRECT_TARGET: f32 = 2.0; // effective spaced-correct to open gate
 
+// application-implies-fluency (PRD bidirectional inference)
+pub const APP_FLUENCY_FLOOR: f32 = 0.8; // any correct application implies at least this fluency
+
 // stale-leaf recalibration (scheduler)
 pub const STALE_FRESHNESS: f32 = 0.6; // below this, probe the leaf again
 pub const STALE_APP_BOOST: f32 = 1.5; // max priority boost when fully stale
+
+// application scheduling (scheduler)
+pub const APP_NEED_BOOST: f32 = 1.5; // max priority boost for weak-application leaves
+pub const APP_RESERVE_FRAC: f32 = 1.0 / 3.0; // session share reserved for application MCQs
 
 // shrinkage readiness + variance-propagated confidence
 pub const PRIOR_MASTERY: f32 = 0.1; // no-evidence prior mastery
