@@ -31,6 +31,74 @@ export function capsulePath(
     ].join(" ");
 }
 
+/** Ordered list of SVG path command letters in `d` (e.g. ["M","C","A","Z"]). */
+export function pathCommandSequence(d: string): string[] {
+    return d.match(/[MLCQAZ]/g) ?? [];
+}
+
+/** Closed tapered limb from (x1,y1,r1) to (x2,y2,r2) with a bezier "muscle
+ * belly" bulge instead of straight sides — same M/A/A/Z contract as
+ * capsulePath (two arc caps) but with C curves for the long edges so the
+ * silhouette reads as organic muscle, not a straight-sided capsule. */
+export function organicLimbPath(
+    x1: number, y1: number, r1: number,
+    x2: number, y2: number, r2: number,
+    bulge = 0.35,
+): string {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len;
+    const ny = dx / len;
+    const bulgeAmt = ((r1 + r2) / 2) * bulge;
+    const c1x = x1 + dx * 0.33 + nx * (r1 + bulgeAmt);
+    const c1y = y1 + dy * 0.33 + ny * (r1 + bulgeAmt);
+    const c2x = x1 + dx * 0.67 + nx * (r2 + bulgeAmt * 0.6);
+    const c2y = y1 + dy * 0.67 + ny * (r2 + bulgeAmt * 0.6);
+    const d1x = x1 + dx * 0.67 - nx * (r2 + bulgeAmt * 0.6);
+    const d1y = y1 + dy * 0.67 - ny * (r2 + bulgeAmt * 0.6);
+    const d2x = x1 + dx * 0.33 - nx * (r1 + bulgeAmt);
+    const d2y = y1 + dy * 0.33 - ny * (r1 + bulgeAmt);
+    return [
+        `M ${fmt(x1 + nx * r1)} ${fmt(y1 + ny * r1)}`,
+        `C ${fmt(c1x)} ${fmt(c1y)} ${fmt(c2x)} ${fmt(c2y)} ${fmt(x2 + nx * r2)} ${fmt(y2 + ny * r2)}`,
+        `A ${fmt(r2)} ${fmt(r2)} 0 0 0 ${fmt(x2 - nx * r2)} ${fmt(y2 - ny * r2)}`,
+        `C ${fmt(d1x)} ${fmt(d1y)} ${fmt(d2x)} ${fmt(d2y)} ${fmt(x1 - nx * r1)} ${fmt(y1 - ny * r1)}`,
+        `A ${fmt(r1)} ${fmt(r1)} 0 0 0 ${fmt(x1 + nx * r1)} ${fmt(y1 + ny * r1)}`,
+        "Z",
+    ].join(" ");
+}
+
+const GLOVE_ANGLES_DEG = [0, 55, 120, 180, 235, 300] as const;
+
+/** Boxing-mitt silhouette: a smoothed 6-point polygon (M + six Q + Z, always
+ * that exact sequence) with one vertex pushed out as a thumb bulge on the
+ * `facing` side. squashX/squashY let a caller build a "contact squash"
+ * keyframe with the same command structure as the rest pose, so the two
+ * can be handed to the Web Animations API as `d` interpolation keyframes. */
+export function glovePath(
+    cx: number, cy: number, r: number,
+    facing: 1 | -1 = 1, squashX = 1, squashY = 1, thumbBulge = 0.28,
+): string {
+    const pts = GLOVE_ANGLES_DEG.map((deg, i) => {
+        const rad = (deg * Math.PI) / 180;
+        const rr = r * (i === 1 ? 1 + thumbBulge : 1);
+        return [
+            cx + Math.cos(rad) * rr * squashX * facing,
+            cy + Math.sin(rad) * rr * squashY,
+        ];
+    });
+    const mid = (a: number[], b: number[]): [number, number] => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    const n = pts.length;
+    const start = mid(pts[n - 1], pts[0]);
+    let d = `M ${fmt(start[0])} ${fmt(start[1])}`;
+    for (let i = 0; i < n; i++) {
+        const end = mid(pts[i], pts[(i + 1) % n]);
+        d += ` Q ${fmt(pts[i][0])} ${fmt(pts[i][1])} ${fmt(end[0])} ${fmt(end[1])}`;
+    }
+    return `${d} Z`;
+}
+
 /** Anatomical pivots in the 120x150 viewBox. Shoulders/hips spread with bulk
  * so pivots always sit exactly on the joints the paths are built from. */
 export function joints(bulk: number): Record<JointName, [number, number]> {
@@ -71,11 +139,15 @@ const TORSOS = [
     "M 39 70 C 40 55 50 48 60 48 C 70 48 80 55 81 70 L 74 92 C 68 97 52 97 46 92 Z",
 ] as const;
 
-/* deltoid/pec/ab highlight strokes; opacity scales with bulk in the rig */
+/* deltoid/pec/ab/oblique/serratus highlight strokes; opacity scales with bulk in the rig */
 const MUSCLES = [
-    "M 50 60 C 54 57 66 57 70 60",
-    "M 52 70 C 56 73 64 73 68 70",
-    "M 56 78 L 56 86 M 64 78 L 64 86",
+    "M 50 60 C 54 57 66 57 70 60",       // upper pec line
+    "M 52 70 C 56 73 64 73 68 70",       // lower pec / sternum
+    "M 56 78 L 56 86 M 64 78 L 64 86",   // ab center lines
+    "M 48 74 C 50 80 50 86 48 92",       // left oblique
+    "M 72 74 C 70 80 70 86 72 92",       // right oblique
+    "M 44 64 C 47 68 47 74 45 78",       // left serratus/lat hint
+    "M 76 64 C 73 68 73 74 75 78",       // right serratus/lat hint
 ] as const;
 
 export function bodyPaths(bulk: number): {
@@ -89,7 +161,7 @@ export function bodyPaths(bulk: number): {
     const seg = (
         from: [number, number], to: [number, number],
         r: readonly [number, number], w: (r: number) => number,
-    ) => capsulePath(from[0], from[1], w(r[0]), to[0], to[1], w(r[1]));
+    ) => organicLimbPath(from[0], from[1], w(r[0]), to[0], to[1], w(r[1]));
     const torso = bulk < 0.2 ? TORSOS[0] : bulk < 0.55 ? TORSOS[1] : bulk < 0.85 ? TORSOS[2] : TORSOS[3];
     return {
         limbs: {
