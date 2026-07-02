@@ -114,7 +114,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 <div
     class="wrap"
     style="transform: scale({scale}) scaleX({mirror}); --amp: {spec.amp}; --wt: {spec.wt};
-           --skin: {pal.skin}; --trunks: {pal.trunks}; --glove: {pal.glove};
+           --glove: {pal.glove};
            --accent: {pal.accent}; --fur: {pal.fur ?? pal.accent};"
 >
     {#key clipTrigger}
@@ -416,10 +416,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             @include g.oneshot(560ms);
             animation-name: cross-forearm;
         }
-        .glove.back {
-            @include g.oneshot(560ms);
-            animation-name: cross-glove;
-        }
     }
     @keyframes cross-root {
         0% { transform: translateX(0); }
@@ -472,10 +468,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             @include g.oneshot(620ms);
             animation-name: upper-forearm;
         }
-        .glove.front {
-            @include g.oneshot(620ms);
-            animation-name: upper-glove;
-        }
     }
     @keyframes upper-root {
         0% { transform: translateY(0); }
@@ -527,10 +519,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         .forearm.front {
             @include g.oneshot(580ms);
             animation-name: hook-forearm;
-        }
-        .glove.front {
-            @include g.oneshot(580ms);
-            animation-name: cross-glove;
         }
         .smear {
             @include g.oneshot(580ms);
