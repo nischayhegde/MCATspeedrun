@@ -186,7 +186,14 @@ turn FightEvents into scheduled clips, then plays them out on timers.
             {:else if mode !== "spar"}
                 <HeavyBag swing={bagSwing} swingTrigger={clipTrigger} />
             {/if}
-            <RingFx badge={model.badge} badgeTrigger={lastTrigger} />
+            <RingFx
+                badge={model.badge}
+                badgeTrigger={lastTrigger}
+                dust={model.shake >= 2}
+                dustTrigger={lastTrigger}
+                sweat={model.shake >= 1 && mode === "spar"}
+                sweatTrigger={lastTrigger}
+            />
         </div>
     </div>
 {/if}
