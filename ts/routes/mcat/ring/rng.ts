@@ -42,7 +42,8 @@ export class ShuffleBag<T> {
     }
 }
 
-/** Deterministic 31-bit hash of a card id (+salt) for stable cosmetic picks. */
+/** Deterministic unsigned 32-bit hash of a card id (+salt) for stable
+ * cosmetic picks (consumers use it modulo a pool size). */
 export function hashId(id: bigint, salt = 0): number {
     let h = Number(((id % 2147483647n) + 2147483647n) % 2147483647n) ^ (salt * 2654435761);
     h = Math.imul(h ^ (h >>> 16), 2246822519);
