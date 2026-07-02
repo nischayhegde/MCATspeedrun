@@ -2,10 +2,22 @@
 Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 -->
+<script context="module" lang="ts">
+    // Unique per mounted instance so simultaneous hero+opponent rigs (or the
+    // gallery's many rigs) don't collide on gradient <defs> ids. Declared in
+    // module context (shared across every FighterRig instance) rather than
+    // in the instance script below — an instance-scoped `let ridCounter = 0`
+    // would reset to 0 on every mount and every rig would compute the same
+    // "rig0" id, defeating the point.
+    let ridCounter = 0;
+</script>
+
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
 
-    import { bodyPaths, joints } from "./geometry";
+    import { shadeColor } from "./color";
+    import { bodyPaths, glovePath, joints } from "./geometry";
+    import { morphPath } from "./morph";
     import type { SpeciesSpec } from "./roster";
 
     const dispatch = createEventDispatcher();
@@ -20,12 +32,24 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     export let clipTrigger = 0;
     export let staticPose: string | null = null;
 
+    const rid = `rig${ridCounter++}`;
+
     $: body = bodyPaths(bulk);
     $: j = joints(bulk);
     $: pal = spec.palettes[paletteIndex % spec.palettes.length];
     $: mirror = facing === "left" ? -1 : 1;
     $: active = staticPose ?? clip ?? stance;
     $: gloveR = 8 + 3 * bulk;
+
+    // Key-art gradient stops derived from the flat palette hex values —
+    // no hand-authored gradient data, see color.ts.
+    $: skinHi = shadeColor(pal.skin, 0.32);
+    $: skinLo = shadeColor(pal.skin, -0.38);
+    $: gloveHi = shadeColor(pal.glove, 0.4);
+    $: gloveLo = shadeColor(pal.glove, -0.45);
+    $: trunksHi = shadeColor(pal.trunks, 0.3);
+    $: trunksLo = shadeColor(pal.trunks, -0.35);
+    $: rimColor = shadeColor(pal.accent, 0.45);
 
     function onAnimEnd(e: AnimationEvent): void {
         // one-shots clear back to stance; loops keep going
@@ -36,6 +60,55 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     const origin = (p: [number, number]): string =>
         `transform-origin: ${p[0]}px ${p[1]}px;`;
+
+    // Organic deformation on top of the existing rotation-based joint system,
+    // for the highest-impact one-shots only (see plan Task 5). Each entry
+    // gives the element ref getter, a duration matching the clip's CSS
+    // animation-duration (see clips.ts), and rest/peak `d` keyframes built
+    // from the same geometry functions used for static rendering.
+    let gloveFrontEl: SVGPathElement | undefined;
+    let gloveBackEl: SVGPathElement | undefined;
+
+    const MORPH_DURATION_MS: Record<string, number> = {
+        "atk-cross": 560,
+        "atk-uppercut": 620,
+        "atk-hook": 580,
+        "hit-head-snap": 480,
+        "hit-gut-fold": 560,
+    };
+
+    function frontGloveD(squashX: number, squashY: number): string {
+        return glovePath(j.forearmFront[0] + 8, j.forearmFront[1] + 14, gloveR, mirror as 1 | -1, squashX, squashY);
+    }
+    function backGloveD(squashX: number, squashY: number): string {
+        return glovePath(j.forearmBack[0] - 6, j.forearmBack[1] + 14, gloveR, -mirror as 1 | -1, squashX, squashY);
+    }
+
+    $: if (clip && clipTrigger && MORPH_DURATION_MS[clip]) {
+        const durationMs = MORPH_DURATION_MS[clip];
+        const rest = [1, 1] as const;
+        const squash: [number, number] = clip === "atk-uppercut" ? [0.85, 1.3] : [1.3, 0.85];
+        if (clip === "atk-cross" || clip === "atk-uppercut" || clip === "atk-hook") {
+            if (gloveBackEl && clip !== "atk-hook" && clip !== "atk-uppercut") {
+                morphPath(gloveBackEl, [
+                    backGloveD(...rest), backGloveD(...squash), backGloveD(...rest),
+                ], { durationMs });
+            }
+            if (gloveFrontEl && (clip === "atk-hook" || clip === "atk-uppercut")) {
+                morphPath(gloveFrontEl, [
+                    frontGloveD(...rest), frontGloveD(...squash), frontGloveD(...rest),
+                ], { durationMs });
+            }
+        } else if (clip === "hit-head-snap" || clip === "hit-gut-fold") {
+            // struck fighter: both gloves flinch-squash slightly, no thumb-side bias
+            if (gloveFrontEl) {
+                morphPath(gloveFrontEl, [frontGloveD(...rest), frontGloveD(0.9, 1.08), frontGloveD(...rest)], { durationMs });
+            }
+            if (gloveBackEl) {
+                morphPath(gloveBackEl, [backGloveD(...rest), backGloveD(0.9, 1.08), backGloveD(...rest)], { durationMs });
+            }
+        }
+    }
 </script>
 
 <div
@@ -46,56 +119,95 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 >
     {#key clipTrigger}
         <svg viewBox="0 0 120 150" width="96" height="120" aria-hidden="true">
+            <defs>
+                <linearGradient id="{rid}-skin" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stop-color={skinHi} />
+                    <stop offset="0.55" stop-color={pal.skin} />
+                    <stop offset="1" stop-color={skinLo} />
+                </linearGradient>
+                <linearGradient id="{rid}-trunks" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stop-color={trunksHi} />
+                    <stop offset="1" stop-color={trunksLo} />
+                </linearGradient>
+                <linearGradient id="{rid}-glove" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stop-color={gloveHi} />
+                    <stop offset="0.6" stop-color={pal.glove} />
+                    <stop offset="1" stop-color={gloveLo} />
+                </linearGradient>
+            </defs>
             <g class="rig {active}" style={origin(j.root)} on:animationend={onAnimEnd}>
                 <ellipse class="shadow" cx="60" cy="147" rx="26" ry="4" />
                 <ellipse class="rope" cx="60" cy="76" rx="40" ry="60" />
                 <g class="pelvis" style={origin(j.pelvis)}>
                     <g class="leg back" style={origin(j.legBack)}>
-                        <path d={body.limbs.legBack} />
+                        <path d={body.limbs.legBack} style="fill:url(#{rid}-trunks)" />
                         <g class="shin back" style={origin(j.shinBack)}>
-                            <path d={body.limbs.shinBack} />
+                            <path d={body.limbs.shinBack} style="fill:url(#{rid}-trunks)" />
                         </g>
                     </g>
                     <g class="leg front" style={origin(j.legFront)}>
-                        <path d={body.limbs.legFront} />
+                        <path d={body.limbs.legFront} style="fill:url(#{rid}-trunks)" />
                         <g class="shin front" style={origin(j.shinFront)}>
-                            <path d={body.limbs.shinFront} />
+                            <path d={body.limbs.shinFront} style="fill:url(#{rid}-trunks)" />
                         </g>
                     </g>
-                    <path class="trunks" d="M 46 88 L 74 88 L 76 104 L 44 104 Z" />
+                    <path class="trunks" d="M 46 88 L 74 88 L 76 104 L 44 104 Z" style="fill:url(#{rid}-trunks)" />
                     <g class="spine" style={origin(j.spine)}>
                         <g class="chest" style={origin(j.chest)}>
                             <g class="arm back" style={origin(j.armBack)}>
-                                <path d={body.limbs.armBack} />
+                                <path d={body.limbs.armBack} style="fill:url(#{rid}-skin)" />
                                 <g class="forearm back" style={origin(j.forearmBack)}>
-                                    <path d={body.limbs.forearmBack} />
-                                    <circle class="glove back" cx={j.forearmBack[0] - 6} cy={j.forearmBack[1] + 14} r={gloveR} />
+                                    <path d={body.limbs.forearmBack} style="fill:url(#{rid}-skin)" />
+                                    <path
+                                        bind:this={gloveBackEl}
+                                        class="glove back"
+                                        d={backGloveD(1, 1)}
+                                        style="fill:url(#{rid}-glove)"
+                                    />
                                 </g>
                             </g>
-                            <path class="torso" d={body.torso} />
+                            <path class="torso" d={body.torso} style="fill:url(#{rid}-skin)" />
                             {#each body.muscles as m (m)}
                                 <path class="muscle" d={m} style="opacity: {0.25 * bulk};" />
                             {/each}
+                            {#if spec.texture === "scale"}
+                                {#each [[52, 74], [60, 76], [68, 74], [54, 84], [66, 84]] as [tx, ty] (tx + "-" + ty)}
+                                    <ellipse class="texture-scale" cx={tx} cy={ty} rx="4" ry="2.6" />
+                                {/each}
+                            {:else if spec.texture === "fur"}
+                                <path class="texture-fur" d="M 44 62 L 41 66 L 45 68 L 42 72 L 46 74 M 76 62 L 79 66 L 75 68 L 78 72 L 74 74" />
+                            {:else if spec.texture === "crack"}
+                                <path class="texture-crack" d="M 54 62 L 58 74 L 55 84 M 68 60 L 65 70 L 69 80" />
+                            {:else if spec.texture === "warpaint"}
+                                <path class="texture-warpaint" d="M 48 68 L 72 66 L 72 71 L 48 73 Z M 50 78 L 70 77 L 70 81 L 50 82 Z" />
+                            {/if}
                             <g class="neck" style={origin(j.neck)}>
-                                <path d={body.limbs.neck} />
+                                <path d={body.limbs.neck} style="fill:url(#{rid}-skin)" />
                                 <g class="head" style={origin(j.head)}>
-                                    <path class="head-shape" d={spec.headPath} />
+                                    <path class="head-shape" d={spec.headPath} style="fill:url(#{rid}-skin)" />
                                     {#each spec.extraPaths as p (p)}
                                         <path class="extra" d={p} />
                                     {/each}
+                                    <path class="rim-light" d="M 54 32 Q 62 26 70 30" style="stroke:{rimColor}" />
                                     <circle class="eye" cx="68" cy="38" r="1.6" />
                                 </g>
                             </g>
+                            <ellipse class="ao-shadow" cx="60" cy="66" rx="16" ry="7" />
                             <rect class="flash" x="30" y="10" width="70" height="120" rx="8" />
                             <g class="arm front" style={origin(j.armFront)}>
-                                <path d={body.limbs.armFront} />
+                                <path d={body.limbs.armFront} style="fill:url(#{rid}-skin)" />
                                 <g class="forearm front" style={origin(j.forearmFront)}>
-                                    <path d={body.limbs.forearmFront} />
+                                    <path d={body.limbs.forearmFront} style="fill:url(#{rid}-skin)" />
                                     <path
                                         class="smear"
                                         d="M {j.forearmFront[0] - 10} {j.forearmFront[1] + 6} Q {j.forearmFront[0] + 14} {j.forearmFront[1] - 2} {j.forearmFront[0] + 8} {j.forearmFront[1] + 24}"
                                     />
-                                    <circle class="glove front" cx={j.forearmFront[0] + 8} cy={j.forearmFront[1] + 14} r={gloveR} />
+                                    <path
+                                        bind:this={gloveFrontEl}
+                                        class="glove front"
+                                        d={frontGloveD(1, 1)}
+                                        style="fill:url(#{rid}-glove)"
+                                    />
                                 </g>
                             </g>
                         </g>
@@ -122,26 +234,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .shadow {
         fill: rgb(0 0 0 / 35%);
     }
-    path,
-    circle.glove {
+    path {
         stroke: #05070c;
         stroke-width: 1.5;
-    }
-    .leg path,
-    .shin path {
-        fill: var(--trunks);
-    }
-    .arm path,
-    .forearm path,
-    .neck > path,
-    .torso {
-        fill: var(--skin);
-    }
-    .trunks {
-        fill: var(--trunks);
-    }
-    .head-shape {
-        fill: var(--skin);
     }
     .extra {
         fill: var(--fur);
@@ -153,11 +248,36 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         stroke: rgb(0 0 0 / 55%);
         stroke-width: 1.4;
     }
-    .glove {
-        fill: var(--glove);
-    }
     .eye {
         fill: #05070c;
+        stroke: none;
+    }
+    .ao-shadow {
+        fill: #000;
+        opacity: 0.28;
+        filter: blur(2.5px);
+        pointer-events: none;
+    }
+    .rim-light {
+        fill: none;
+        stroke-width: 1.2;
+        stroke-linecap: round;
+        opacity: 0.55;
+    }
+    .texture-scale {
+        fill: rgb(0 0 0 / 18%);
+        stroke: none;
+    }
+    .texture-fur,
+    .texture-crack {
+        fill: none;
+        stroke: rgb(0 0 0 / 35%);
+        stroke-width: 1.2;
+        stroke-linecap: round;
+    }
+    .texture-warpaint {
+        fill: var(--accent);
+        opacity: 0.85;
         stroke: none;
     }
     /* motion aids — invisible until their clip drives opacity */
