@@ -12,7 +12,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 </script>
 
 <button class="idk" class:selected {disabled} on:click={() => dispatch("choose")}>
-    Not sure — show me <span class="hint"><KeyHint key="0" /></span>
+    I don't know <span class="hint"><KeyHint key="0" /></span>
 </button>
 
 <style lang="scss">

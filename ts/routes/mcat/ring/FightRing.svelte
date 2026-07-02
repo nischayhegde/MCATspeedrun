@@ -93,11 +93,11 @@ turn FightEvents into scheduled clips, then plays them out on timers.
         <button class="sf-show" on:click={toggle}>🥊 Show ring</button>
     </div>
 {:else}
-    <div class="sf-ring" style="height:{height}px" aria-hidden="true">
-        <div class="ropes"></div>
-        <div class="floor"></div>
-        <div class="post l"></div>
-        <div class="post r"></div>
+    <div class="sf-ring" style="height:{height}px">
+        <div class="ropes" aria-hidden="true"></div>
+        <div class="floor" aria-hidden="true"></div>
+        <div class="post l" aria-hidden="true"></div>
+        <div class="post r" aria-hidden="true"></div>
         <button class="sf-hide" on:click={toggle} title="Hide the ring">✕</button>
 
         {#if marquee}
@@ -107,7 +107,7 @@ turn FightEvents into scheduled clips, then plays them out on timers.
             </div>
         {/if}
 
-        <div class="stage shake-{model.shake}">
+        <div class="stage shake-{model.shake}" aria-hidden="true">
             <div class="corner user" class:bagpose={mode !== "spar"}>
                 <FighterRig
                     spec={HERO}
@@ -285,12 +285,17 @@ turn FightEvents into scheduled clips, then plays them out on timers.
         opacity: 0;
         transition: opacity 0.15s ease;
     }
-    .sf-ring:hover .sf-hide {
+    .sf-ring:hover .sf-hide,
+    .sf-hide:focus-visible {
         opacity: 1;
     }
     .sf-hide:hover {
         color: var(--sf-text);
         background: rgba(255, 255, 255, 0.12);
+    }
+    .sf-hide:focus-visible {
+        outline: none;
+        box-shadow: var(--sf-focus);
     }
     .sf-boxer-collapsed {
         flex-shrink: 0;
@@ -310,6 +315,7 @@ turn FightEvents into scheduled clips, then plays them out on timers.
     .sf-show:hover {
         color: var(--sf-text);
         border-color: var(--sf-red);
+        background: color-mix(in srgb, var(--sf-red) 10%, transparent);
     }
     @media (prefers-reduced-motion: reduce) {
         .stage {

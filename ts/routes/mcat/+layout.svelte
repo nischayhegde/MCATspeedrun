@@ -6,6 +6,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     import { goto } from "$app/navigation";
     import { page } from "$app/stores";
 
+    import gloveIcon from "./lib/assets/glove-icon.png";
+
     const links = [
         { href: "/mcat", label: "Dashboard" },
         { href: "/mcat/study", label: "Study" },
@@ -23,29 +25,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             on:click={() => goto("/mcat")}
             aria-label="Scorefighter home"
         >
-            <svg class="glove-mark" viewBox="0 0 48 48" aria-hidden="true">
-                <g fill="currentColor">
-                    <path
-                        d="M17 40V27a11 11 0 0 1 11-11h1a10 10 0 0 1 10 10v3a11 11 0 0 1-11 11z"
-                    />
-                    <circle cx="13.5" cy="25" r="7.5" />
-                    <path d="M16 27h23v7a5 5 0 0 1-5 5H21a5 5 0 0 1-5-5z" />
-                </g>
-                <path
-                    fill="none"
-                    stroke="rgba(0,0,0,.22)"
-                    stroke-width="1.8"
-                    stroke-linecap="round"
-                    d="M19 24.5c3.5 2 7.5 2 11 0"
-                />
-                <path
-                    fill="none"
-                    stroke="rgba(0,0,0,.22)"
-                    stroke-width="1.6"
-                    stroke-linecap="round"
-                    d="M24 30.5l4 4m0-4l-4 4"
-                />
-            </svg>
+            <img class="glove-mark" src={gloveIcon} alt="" aria-hidden="true" />
             <span class="wordmark">Score<b>fighter</b></span>
         </button>
         {#if showKbdLegend}
@@ -56,6 +36,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 <button
                     class="nav-link"
                     class:active={path === link.href}
+                    aria-current={path === link.href ? "page" : undefined}
                     on:click={() => goto(link.href)}
                 >
                     {link.label}
@@ -149,13 +130,23 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         border: none;
         background: none;
         cursor: pointer;
-        padding: 0;
+        padding: 0.25rem 0.5rem;
+        margin: -0.25rem -0.5rem;
+        border-radius: 0.5rem;
+        transition: background 0.12s ease;
+        &:hover {
+            background: color-mix(in srgb, var(--sf-red) 8%, transparent);
+        }
+        &:focus-visible {
+            outline: none;
+            box-shadow: var(--sf-focus);
+        }
     }
 
     .glove-mark {
-        width: 26px;
-        height: 26px;
-        color: var(--sf-red);
+        width: 28px;
+        height: 28px;
+        display: block;
         filter: drop-shadow(0 1px 2px rgba(225, 29, 47, 0.35));
     }
 
@@ -203,6 +194,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         transition:
             background 0.12s ease,
             color 0.12s ease;
+        &:focus-visible {
+            outline: none;
+            box-shadow: var(--sf-focus);
+        }
     }
 
     .nav-link:hover {

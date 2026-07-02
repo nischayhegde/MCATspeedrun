@@ -5,13 +5,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 <script lang="ts">
     export let value = 0; // 0..1
     export let tone: "red" | "gold" = "red";
+
+    $: pct = Math.round(Math.max(0, Math.min(1, value)) * 100);
 </script>
 
-<div class="track">
-    <div
-        class="fill {tone}"
-        style:width={`${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`}
-    ></div>
+<div class="track" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+    <div class="fill {tone}" style:width={`${pct}%`}></div>
 </div>
 
 <style lang="scss">

@@ -328,7 +328,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 {#each rankedRows as row (row.section)}
                     <div class="section-row">
                         <span class="section-name">{row.section}</span>
-                        <div class="track">
+                        <div
+                            class="track"
+                            role="progressbar"
+                            aria-valuenow={row.pct}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                        >
                             <div class="fill" style:width={`${row.pct}%`}></div>
                         </div>
                         <span class="section-val">{row.correct}/{row.total}</span>
@@ -363,12 +369,14 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         display: flex;
         flex-direction: column;
         gap: 0.75rem;
-        overflow: hidden;
+        overflow-x: hidden;
+        overflow-y: auto;
         box-sizing: border-box;
     }
 
-    /* Each phase panel fills the leftover height; if a panel is unusually tall
-       it scrolls inside its own box so the page itself never scrolls. */
+    /* Each phase panel fills the leftover height and scrolls inside its own
+       box if unusually tall; the page itself can also scroll as a fallback
+       so actions at the bottom (e.g. Continue) are never clipped. */
     .panel {
         flex: 1 1 auto;
         min-height: 0;
@@ -484,7 +492,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     .section-name {
         width: 3.5rem;
+        flex-shrink: 0;
         font-weight: 700;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .track {

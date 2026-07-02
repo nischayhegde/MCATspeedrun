@@ -46,7 +46,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         cursor: pointer;
         color: inherit;
         opacity: 0.6;
+        border-radius: 0.4rem;
+        transition: background 0.12s ease, opacity 0.12s ease;
         @include sf.focusable;
+        &:hover {
+            opacity: 1;
+            background: color-mix(in srgb, var(--sf-text) 8%, transparent);
+        }
     }
     .progress-track {
         flex: 1;
@@ -72,7 +78,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         opacity: 0.55;
         color: inherit;
         font-variant-numeric: tabular-nums;
+        border-radius: 0.4rem;
+        transition: background 0.12s ease, opacity 0.12s ease;
         @include sf.focusable;
+        &:hover {
+            opacity: 1;
+            background: color-mix(in srgb, var(--sf-text) 8%, transparent);
+        }
     }
     .pace {
         width: 6px;

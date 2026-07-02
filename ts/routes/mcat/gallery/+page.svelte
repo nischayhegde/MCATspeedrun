@@ -203,6 +203,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         color: var(--sf-text);
         cursor: pointer;
     }
+    .player button:hover {
+        background: color-mix(in srgb, var(--sf-text) 8%, var(--sf-surface));
+    }
     .player .meta {
         font-size: 11px;
         color: var(--sf-dim);
@@ -252,5 +255,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .row.buttons button:hover {
         border-color: var(--sf-red);
+        background: color-mix(in srgb, var(--sf-red) 10%, var(--sf-surface));
     }
 </style>

@@ -13,8 +13,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     } from "@generated/anki/scheduler_pb";
     import { recomputeMcatLeafStates, resetMcatProgress } from "@generated/backend";
     import MeterBar from "./lib/MeterBar.svelte";
-    import FighterRig from "./ring/FighterRig.svelte";
-    import { SPECIES, TIER_SPECIES, tierFromMastery } from "./ring/roster";
 
     export let readiness: McatReadinessResponse;
 
@@ -94,11 +92,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     $: sections = groupBySection(readiness.leaves);
     $: assessedCount = readiness.leaves.filter((l) => l.assessed).length;
-    $: weakest = readiness.leaves
-        .filter((l) => l.assessed)
-        .map((l) => ({ leaf: l, weakness: 1 - l.fluency * 0.6 - l.application * 0.4 }))
-        .sort((a, b) => b.weakness - a.weakness)
-        .slice(0, 3);
 </script>
 
 <svelte:window on:keydown={onWindowKeydown} on:click={onWindowClick} />
@@ -221,37 +214,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 </div>
             </div>
         </div>
-    {/if}
-
-    {#if weakest.length}
-        <section class="next-opponents">
-            <h2>Next opponents</h2>
-            <div class="fight-cards">
-                {#each weakest as w (w.leaf.leafId)}
-                    {@const tier = tierFromMastery(w.weakness)}
-                    {@const spec = SPECIES[TIER_SPECIES[tier][0]]}
-                    <div class="fight-card">
-                        <div class="portrait">
-                            <FighterRig
-                                {spec}
-                                bulk={0.7}
-                                scale={0.5}
-                                facing="left"
-                                staticPose="stance-guard"
-                            />
-                        </div>
-                        <div class="tale">
-                            <span class="name">{w.leaf.name}</span>
-                            <MeterBar value={w.leaf.fluency} tone="red" />
-                            <MeterBar value={w.leaf.application} tone="gold" />
-                        </div>
-                        <button class="fight" on:click={() => goto("/mcat/study")}>
-                            Fight →
-                        </button>
-                    </div>
-                {/each}
-            </div>
-        </section>
     {/if}
 
     {#each sections as section (section.label)}
@@ -587,60 +549,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         font-variant-numeric: tabular-nums;
     }
 
-    .next-opponents {
-        margin-bottom: 1.5rem;
-    }
-
-    .fight-cards {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
-        gap: 0.75rem;
-    }
-
-    .fight-card {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        padding: 0.7rem 0.85rem;
-        background: var(--canvas-elevated);
-        border: 1px solid var(--border);
-        border-radius: 0.6rem;
-    }
-
-    .portrait {
-        flex-shrink: 0;
-        line-height: 0;
-    }
-
-    .tale {
-        flex: 1;
-        min-width: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 0.3rem;
-    }
-
-    .tale .name {
-        font-size: 0.85rem;
-        font-weight: 600;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    .fight-card .fight {
-        @include sf.button-primary;
-        flex-shrink: 0;
-        padding: 0.5rem 0.9rem;
-        font-size: 0.85rem;
-    }
-
     .tag-section {
         margin-bottom: 1.5rem;
     }
 
-    .tag-section h2,
-    .next-opponents h2 {
+    .tag-section h2 {
         font-size: 13px;
         text-transform: uppercase;
         letter-spacing: 0.08em;

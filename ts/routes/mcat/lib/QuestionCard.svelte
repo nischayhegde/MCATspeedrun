@@ -6,13 +6,14 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     export let image = "";
     export let front = "";
     export let alt = "question";
+    export let center = false;
 </script>
 
 <div class="card question">
     {#if image}
         <div class="qimg"><img src={image} {alt} /></div>
     {:else if front}
-        <div class="qtext"><p class="stem">{front}</p></div>
+        <div class="qtext" class:center><p class="stem">{front}</p></div>
     {/if}
 </div>
 
@@ -36,6 +37,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         min-height: 0;
         align-self: stretch;
         overflow: auto;
+    }
+    .qtext.center {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
     }
     .stem {
         margin: 0;

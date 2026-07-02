@@ -168,7 +168,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 chooseLetter(key.toUpperCase());
             } else if (chosen === null && key === "0") {
                 chooseIdk();
-            } else if (chosen !== null && (key === " " || key === "enter")) {
+            } else if (chosen !== null && !answering && (key === " " || key === "enter")) {
                 next();
             }
         } else {
@@ -248,7 +248,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 </div>
             {/if}
         {:else}
-            <QuestionCard front={item.front} alt={`${item.leafName} prompt`} />
+            <QuestionCard front={item.front} alt={`${item.leafName} prompt`} center />
             {#if revealed}
                 <div class="answer">
                     <hr />
@@ -296,14 +296,15 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         display: flex;
         flex-direction: column;
         gap: 0.7rem;
-        overflow: hidden;
+        overflow-x: hidden;
+        overflow-y: auto;
         box-sizing: border-box;
     }
 
     /* Feedback shares the leftover space; the explanation scrolls inside its
-       own box (only if truly long) so the page never scrolls and Continue
-       stays visible. QuestionCard is the only flex:1 element, so the stem
-       never moves when feedback appears. */
+       own box (only if truly long). QuestionCard is the only flex:1 element,
+       so the stem is what yields first as things get tight — but the page
+       itself can still scroll as a fallback so Continue is never clipped. */
     .feedback {
         flex: 0 1 auto;
         max-height: 40%;
@@ -394,6 +395,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         font-weight: 600;
         transition: border-color 0.12s ease, background 0.12s ease;
         @include sf.focusable;
+        &:hover {
+            background: color-mix(in srgb, var(--sf-text) 6%, transparent);
+        }
     }
 
     .rating.again {
