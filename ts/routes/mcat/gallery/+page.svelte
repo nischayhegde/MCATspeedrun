@@ -3,16 +3,109 @@ Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 -->
 <script lang="ts">
+    import { CLIPS } from "../ring/clips";
     import FighterRig from "../ring/FighterRig.svelte";
     import { BUILD_BULK } from "../ring/geometry";
+    import HeavyBag from "../ring/HeavyBag.svelte";
+    import RingFx from "../ring/RingFx.svelte";
     import { SPECIES } from "../ring/roster";
 
     const specs = Object.values(SPECIES);
     const bulks = Object.entries(BUILD_BULK);
+
+    // --- Step-4 clip player -------------------------------------------------
+    const clipIds = Object.keys(CLIPS);
+    let selected = "atk-cross";
+    let clip: string | null = null;
+    let clipTrigger = 0;
+
+    // Opponent mirrors the hero clip under the opp- reuse rules.
+    let oppClip: string | null = null;
+
+    // Ring FX + heavy bag driven off the same Play.
+    let badgeTrigger = 0;
+    let swingTrigger = 0;
+
+    $: def = CLIPS[selected];
+    $: badge = def?.badge ?? null;
+    $: bagSwing = selected.startsWith("bag-") && selected !== "bag-sway"
+        ? selected.slice("bag-".length)
+        : null;
+
+    // Opponent plays its own opp- variant when one exists, else mirrors the
+    // hero clip (rig is facing-mirrored, so the reuse reads correctly).
+    function oppVariant(id: string): string | null {
+        const opp = "opp-" + id;
+        if (opp in CLIPS) {
+            return opp;
+        }
+        return id in CLIPS ? id : null;
+    }
+
+    function play(): void {
+        clip = selected;
+        oppClip = oppVariant(selected);
+        clipTrigger += 1;
+        badgeTrigger += 1;
+        if (bagSwing) {
+            swingTrigger += 1;
+        }
+    }
+
+    function onClipend(): void {
+        clip = null;
+        oppClip = null;
+    }
 </script>
 
 <div class="gallery">
     <h1>Rig gallery (dev)</h1>
+
+    <section>
+        <h2>Clip player</h2>
+        <div class="player">
+            <select bind:value={selected}>
+                {#each clipIds as id (id)}
+                    <option value={id}>{id}</option>
+                {/each}
+            </select>
+            <button on:click={play}>Play</button>
+            <span class="meta">
+                {def?.durMs}ms · intensity {def?.intensity}
+            </span>
+        </div>
+        <div class="stage">
+            <div class="fx-frame">
+                <FighterRig
+                    spec={SPECIES.rookie}
+                    bulk={0.4}
+                    scale={1.6}
+                    {clip}
+                    {clipTrigger}
+                    on:clipend={onClipend}
+                />
+                <RingFx {badge} {badgeTrigger} />
+                <span class="cap">ROOKIE (--wt light)</span>
+            </div>
+            <div class="fx-frame">
+                <FighterRig
+                    spec={SPECIES.bullhorn}
+                    bulk={1}
+                    scale={1.6}
+                    facing="left"
+                    clip={oppClip}
+                    {clipTrigger}
+                    on:clipend={onClipend}
+                />
+                <span class="cap">BULLHORN (--wt heavy)</span>
+            </div>
+            <div class="fx-frame bag">
+                <HeavyBag swing={bagSwing} {swingTrigger} />
+                <span class="cap">heavy bag</span>
+            </div>
+        </div>
+    </section>
+
     <section>
         <h2>Builds (hero palette)</h2>
         <div class="row">
@@ -56,5 +149,54 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         font-size: 11px;
         color: var(--sf-dim);
         letter-spacing: 0.08em;
+    }
+    .player {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    .player select,
+    .player button {
+        font: inherit;
+        padding: 0.3rem 0.6rem;
+        border-radius: 0.5rem;
+        border: 1px solid var(--sf-border);
+        background: var(--sf-surface);
+        color: var(--sf-text);
+        cursor: pointer;
+    }
+    .player .meta {
+        font-size: 11px;
+        color: var(--sf-dim);
+    }
+    .stage {
+        display: flex;
+        gap: 2rem;
+        align-items: flex-end;
+    }
+    .fx-frame {
+        position: relative;
+        width: 160px;
+        height: 220px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        border: 1px dashed var(--sf-border);
+        border-radius: 12px;
+        background: linear-gradient(180deg, #10131a 0%, #0b0e14 100%);
+    }
+    .fx-frame .cap {
+        position: absolute;
+        bottom: 4px;
+        left: 0;
+        right: 0;
+        font-size: 11px;
+        color: var(--sf-dim);
+        letter-spacing: 0.08em;
+        text-align: center;
+    }
+    .fx-frame.bag {
+        overflow: hidden;
     }
 </style>
