@@ -29,6 +29,7 @@ export interface SpeciesSpec {
     hitSfx: string;
     amp: number;
     wt: number;
+    texture?: "scale" | "fur" | "crack" | "hide" | "warpaint";
 }
 
 export interface OpponentInstance {
@@ -44,95 +45,95 @@ export interface OpponentInstance {
 export const SPECIES: Record<Species, SpeciesSpec> = {
     rookie: {
         id: "rookie", name: "ROOKIE", chassis: "biped", build: "lean",
-        headPath: "M 52 30 A 11 11 0 1 1 52 52 A 12 13 0 0 1 52 30 Z",
-        extraPaths: ["M 50 28 A 13 13 0 0 1 76 32 L 72 40 A 9 9 0 0 0 54 38 Z"], // headgear dome
+        headPath: "M 51 29 C 47 33 46 40 48 46 C 50 51 55 54 61 53 C 68 52 72 46 71 39 C 70 32 64 27 57 28 C 55 28 53 28 51 29 Z",
+        extraPaths: ["M 49 27 A 13 13 0 0 1 76 31 L 71 40 A 9 9 0 0 0 53 37 Z"],
         palettes: [
-            { skin: "#c9a181", trunks: "#3d4657", glove: "#4a5262", accent: "#566073" },
-            { skin: "#a9846a", trunks: "#42556a", glove: "#4a5262", accent: "#5d6b80" },
+            { skin: "#c9a181", trunks: "#2f3644", glove: "#3a4152", accent: "#8f97a8" },
+            { skin: "#a9846a", trunks: "#33465a", glove: "#3d4f61", accent: "#9aa6b8" },
         ],
         hitSfx: "BAP!", amp: 1.15, wt: 0.9,
+        texture: "hide",
     },
     sidewinder: {
         id: "sidewinder", name: "SIDEWINDER", chassis: "biped", build: "fit",
         headPath: "M 50 34 Q 58 26 70 32 Q 76 38 70 48 Q 58 54 50 46 Z",
-        // tall, long front-to-back sail crest reading at a squint + snout hint
         extraPaths: [
             "M 48 34 Q 52 12 60 8 Q 68 10 72 20 Q 66 22 62 26 Q 56 30 52 36 Z",
             "M 70 40 Q 79 40 82 45",
         ],
         palettes: [
-            { skin: "#3f5c54", trunks: "#2e4a4a", glove: "#37504e", accent: "#5f7a72" },
-            { skin: "#46584f", trunks: "#33484f", glove: "#3a4f52", accent: "#67806f" },
+            { skin: "#33504a", trunks: "#25403f", glove: "#2f4644", accent: "#4f6a63" },
+            { skin: "#3a4c45", trunks: "#2a3e44", glove: "#324744", accent: "#576f66" },
         ],
         hitSfx: "SSAK!", amp: 1.1, wt: 0.95,
+        texture: "scale",
     },
     hobnail: {
         id: "hobnail", name: "HOBNAIL", chassis: "biped", build: "heavy",
-        headPath: "M 50 32 Q 62 24 74 32 Q 78 42 72 50 Q 60 56 50 48 Z",
-        // hunched trapezius hump rising behind the neck + bold ear points
+        headPath: "M 49 31 C 51 24 58 20 65 21 C 73 22 78 29 77 38 C 76 46 69 52 61 51 C 53 50 48 44 48 37 C 48 35 48 33 49 31 Z",
         extraPaths: [
-            "M 38 66 Q 39 54 48 49 Q 55 46 62 51 Q 69 46 76 49 Q 85 54 86 66 Q 62 61 38 66 Z",
-            "M 47 35 L 35 27 L 48 41 Z",
-            "M 75 35 L 87 27 L 74 41 Z",
+            "M 37 65 C 38 53 47 47 55 49 C 58 45 65 45 68 49 C 76 47 84 53 85 65 C 61 60 37 65 37 65 Z",
+            "M 46 34 L 33 26 L 47 40 Z",
+            "M 76 34 L 89 26 L 75 40 Z",
         ],
         palettes: [
-            { skin: "#6a6f4e", trunks: "#3a4030", glove: "#4c523c", accent: "#7c825e" },
-            { skin: "#5e6549", trunks: "#3f4436", glove: "#50563f", accent: "#878c66" },
+            { skin: "#565b3e", trunks: "#2c3125", glove: "#3d4230", accent: "#6a7050" },
+            { skin: "#4c5140", trunks: "#31352b", glove: "#42473a", accent: "#767c5a" },
         ],
         hitSfx: "CRACK!", amp: 0.95, wt: 1.1,
+        texture: "hide",
     },
     howler: {
         id: "howler", name: "HOWLER", chassis: "biped", build: "heavy",
-        // elongated wolf muzzle protruding to the front
         headPath: "M 48 34 Q 56 25 66 29 L 86 40 Q 78 50 62 52 Q 50 50 48 42 Z",
-        // larger upright wolf ears
         extraPaths: ["M 51 27 L 45 12 L 60 22 Z", "M 62 26 L 63 10 L 73 22 Z"],
         palettes: [
-            { skin: "#2b2f38", trunks: "#232732", glove: "#343947", accent: "#4a4f5c", fur: "#4a4f5c" },
-            { skin: "#31353f", trunks: "#282c37", glove: "#3a3f4d", accent: "#525866", fur: "#525866" },
+            { skin: "#22252c", trunks: "#1c1f28", glove: "#2c303c", accent: "#3f4450", fur: "#3f4450" },
+            { skin: "#282c36", trunks: "#22252f", glove: "#333844", accent: "#464c59", fur: "#464c59" },
         ],
         hitSfx: "AWROO!", amp: 1.05, wt: 1.0,
+        texture: "fur",
     },
     gravel: {
         id: "gravel", name: "GRAVEL", chassis: "biped", build: "colossal",
         headPath: "M 50 30 L 76 30 L 78 48 L 48 48 Z",
-        extraPaths: ["M 54 34 L 60 44", "M 66 32 L 70 46"], // crack seams (accent stroke)
+        extraPaths: ["M 54 34 L 60 44", "M 66 32 L 70 46"],
         palettes: [
-            { skin: "#33363d", trunks: "#2a2d33", glove: "#3d4148", accent: "#a3121c" },
-            { skin: "#383b42", trunks: "#2e3138", glove: "#42464e", accent: "#8c1019" },
+            { skin: "#2a2d33", trunks: "#212429", glove: "#33373d", accent: "#8c1019" },
+            { skin: "#2f3238", trunks: "#26292e", glove: "#383c42", accent: "#7a0e16" },
         ],
         hitSfx: "THOOM!", amp: 0.8, wt: 1.25,
+        texture: "crack",
     },
     bullhorn: {
         id: "bullhorn", name: "BULLHORN", chassis: "biped", build: "colossal",
-        headPath: "M 50 32 Q 62 22 74 32 Q 78 44 70 52 L 66 56 Q 62 58 58 56 L 54 52 Q 46 44 50 32 Z",
+        headPath: "M 49 31 C 53 22 63 19 71 24 C 78 29 80 39 74 47 L 68 54 C 63 57 58 57 54 54 L 49 48 C 43 41 45 35 49 31 Z",
         extraPaths: [
-            // WIDE horn span: thick at the temples, sweeping outward-and-up well
-            // past the head, with upturned tips (total span ~2.5x head width)
-            "M 52 33 Q 40 31 30 24 Q 22 18 24 11 Q 30 17 39 21 Q 48 25 55 29 Z",
-            "M 72 33 Q 84 31 94 24 Q 102 18 100 11 Q 94 17 85 21 Q 76 25 69 29 Z",
-            "M 58 50 Q 62 54 66 50", // snout ring line
+            "M 51 32 C 39 30 29 23 29 16 C 29 12 32 10 35 12 C 38 18 47 22 56 26 Z",
+            "M 71 32 C 83 30 93 23 93 16 C 93 12 90 10 87 12 C 84 18 75 22 66 26 Z",
+            "M 58 51 C 62 55 66 51 66 51",
         ],
         palettes: [
-            { skin: "#262223", trunks: "#1d1a1b", glove: "#3a3336", accent: "#8a6d2f" },
-            { skin: "#2c2628", trunks: "#221e20", glove: "#413a3d", accent: "#9b7c38" },
+            { skin: "#231f20", trunks: "#191617", glove: "#312b2d", accent: "#7a5f28" },
+            { skin: "#282324", trunks: "#1e1a1b", glove: "#383133", accent: "#8a6d2f" },
         ],
         hitSfx: "THUD!", amp: 0.8, wt: 1.25,
+        texture: "hide",
     },
     chiron: {
         id: "chiron", name: "CHIRON, WARLORD", chassis: "taur", build: "colossal",
         headPath: "M 52 30 Q 62 22 72 30 Q 76 40 70 48 Q 60 54 52 46 Z",
-        // bold red mohawk mane + thick war-paint stripes across the face
         extraPaths: [
             "M 52 30 Q 50 12 58 6 Q 62 8 62 18 Q 64 8 70 8 Q 72 16 68 24 Q 64 26 60 28 Q 56 30 52 30 Z",
             "M 53 37 L 71 35 L 71 40 L 53 42 Z",
             "M 55 45 L 69 44 L 69 48 L 56 49 Z",
         ],
         palettes: [
-            { skin: "#3a2d26", trunks: "#2b211c", glove: "#4a3a30", accent: "#a3121c" },
-            { skin: "#41332b", trunks: "#302620", glove: "#524139", accent: "#8c1019" },
+            { skin: "#302520", trunks: "#241b17", glove: "#3c2f27", accent: "#8c1019" },
+            { skin: "#362a24", trunks: "#291f1b", glove: "#453630", accent: "#7a0e16" },
         ],
         hitSfx: "BOOM!", amp: 0.85, wt: 1.2,
+        texture: "warpaint",
     },
 };
 
@@ -144,9 +145,10 @@ export const HERO: SpeciesSpec = {
     headPath: SPECIES.rookie.headPath,
     extraPaths: SPECIES.rookie.extraPaths,
     palettes: [
-        { skin: "#e0b088", trunks: "#c81e2c", glove: "#e11d2f", accent: "#f5c451" },
+        { skin: "#e0b088", trunks: "#a3121c", glove: "#c81e2c", accent: "#f5c451" },
     ],
     hitSfx: "POW!", amp: 1.0, wt: 1.0,
+    texture: "hide",
 };
 
 export const TIER_SPECIES: Record<Tier, Species[]> = {

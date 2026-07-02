@@ -48,5 +48,11 @@ test("all seven species exist with heads and palettes", () => {
 });
 
 test("HERO carries the hero palette", () => {
-    expect(HERO.palettes[0].glove).toBe("#e11d2f");
+    expect(HERO.palettes[0].glove).toBe("#c81e2c");
+});
+
+test("every species declares a material texture", () => {
+    for (const s of Object.values(SPECIES)) {
+        expect(s.texture).toBeDefined();
+    }
 });
