@@ -43,6 +43,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     type Phase = "intro" | "exam" | "submitting" | "results";
     let phase: Phase = "intro";
+    // Typed via `let` so the "spar"|"bag" literals survive into FightRing's
+    // "spar"|"train"|"bag" prop (a bare `$:` conditional would widen to `string`).
+    let ringMode: "spar" | "bag";
     $: ringMode = phase === "results" ? "spar" : "bag";
 
     let index = 0;
@@ -169,9 +172,16 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     async function finish(): Promise<void> {
         confirmOpen = false;
         phase = "submitting";
+        // Tallies straight from `perSection` (mutated synchronously in lock()),
+        // so this always reflects the just-locked final answer — unlike the
+        // reactive `answeredCount`, which flushes one microtask later and would
+        // be stale here on the natural-completion path.
+        const tallies = [...perSection.values()];
+        const answered = tallies.reduce((n, v) => n + v.total, 0);
+        const correct = tallies.reduce((n, v) => n + v.correct, 0);
         // wait for the in-flight answer writes to land, then recompute
         const started = Date.now();
-        while (submittedCount < answeredCount && Date.now() - started < 30_000) {
+        while (submittedCount < answered && Date.now() - started < 30_000) {
             await new Promise((r) => setTimeout(r, 100));
         }
         readiness = await recomputeMcatLeafStates({});
@@ -180,9 +190,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         // (productive failure -> back to training). Computed straight from the
         // tallies (not the reactive `pct`, whose flush timing we don't want to
         // depend on) so the tableau matches the headline exactly.
-        const tallies = [...perSection.values()];
-        const answered = tallies.reduce((n, v) => n + v.total, 0);
-        const correct = tallies.reduce((n, v) => n + v.correct, 0);
         const outcomePct = answered ? Math.round((correct / answered) * 100) : 0;
         // Thresholds per spec: >=60 win, 40-59 draw, <40 loss.
         if (outcomePct >= 60) {
