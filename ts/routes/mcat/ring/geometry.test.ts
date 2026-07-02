@@ -10,6 +10,9 @@ test("capsulePath is a closed path with two arc caps", () => {
     expect(p.startsWith("M ")).toBe(true);
     expect(p.match(/A /g)?.length).toBe(2);
     expect(p.trim().endsWith("Z")).toBe(true);
+    // sweep flag 0 = caps bulge outward, not into the limb
+    expect(p).toContain("A 5.00 5.00 0 0 0");
+    expect(p).toContain("A 3.00 3.00 0 0 0");
 });
 
 test("shoulders widen with bulk, joints stay anatomical", () => {

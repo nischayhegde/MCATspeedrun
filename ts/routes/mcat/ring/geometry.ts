@@ -20,12 +20,13 @@ export function capsulePath(
     const len = Math.hypot(dx, dy) || 1;
     const nx = -dy / len;
     const ny = dx / len;
+    // sweep-flag 0: with n = d rotated +90° in y-down coords, the outward cap is the negative-angle arc for both ends.
     return [
         `M ${fmt(x1 + nx * r1)} ${fmt(y1 + ny * r1)}`,
         `L ${fmt(x2 + nx * r2)} ${fmt(y2 + ny * r2)}`,
-        `A ${fmt(r2)} ${fmt(r2)} 0 0 1 ${fmt(x2 - nx * r2)} ${fmt(y2 - ny * r2)}`,
+        `A ${fmt(r2)} ${fmt(r2)} 0 0 0 ${fmt(x2 - nx * r2)} ${fmt(y2 - ny * r2)}`,
         `L ${fmt(x1 - nx * r1)} ${fmt(y1 - ny * r1)}`,
-        `A ${fmt(r1)} ${fmt(r1)} 0 0 1 ${fmt(x1 + nx * r1)} ${fmt(y1 + ny * r1)}`,
+        `A ${fmt(r1)} ${fmt(r1)} 0 0 0 ${fmt(x1 + nx * r1)} ${fmt(y1 + ny * r1)}`,
         "Z",
     ].join(" ");
 }
