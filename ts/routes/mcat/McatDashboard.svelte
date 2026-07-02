@@ -3,6 +3,8 @@ Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 -->
 <script lang="ts">
+    import { onMount } from "svelte";
+
     import { goto } from "$app/navigation";
 
     import type {
@@ -10,21 +12,28 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         McatReadinessResponse,
     } from "@generated/anki/scheduler_pb";
     import { recomputeMcatLeafStates, resetMcatProgress } from "@generated/backend";
+    import MeterBar from "./lib/MeterBar.svelte";
+    import FighterRig from "./ring/FighterRig.svelte";
+    import { SPECIES, TIER_SPECIES, tierFromMastery } from "./ring/roster";
 
     export let readiness: McatReadinessResponse;
 
-    let recomputing = false;
+    let refreshing = false;
     let confirmingReset = false;
     let resetting = false;
+    let menuOpen = false;
 
-    async function recompute(): Promise<void> {
-        recomputing = true;
-        try {
-            readiness = await recomputeMcatLeafStates({});
-        } finally {
-            recomputing = false;
-        }
-    }
+    onMount(() => {
+        // Fire-and-forget: never block first paint on a recompute round-trip.
+        refreshing = true;
+        recomputeMcatLeafStates({})
+            .then((fresh) => {
+                readiness = fresh;
+            })
+            .finally(() => {
+                refreshing = false;
+            });
+    });
 
     async function reset(): Promise<void> {
         resetting = true;
@@ -33,6 +42,31 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             confirmingReset = false;
         } finally {
             resetting = false;
+        }
+    }
+
+    function focusOnMount(node: HTMLElement): void {
+        node.focus();
+    }
+
+    function openReset(): void {
+        menuOpen = false;
+        confirmingReset = true;
+    }
+
+    function onWindowKeydown(e: KeyboardEvent): void {
+        if (e.key === "Escape") {
+            if (confirmingReset && !resetting) {
+                confirmingReset = false;
+            } else if (menuOpen) {
+                menuOpen = false;
+            }
+        }
+    }
+
+    function onWindowClick(e: MouseEvent): void {
+        if (menuOpen && !(e.target as HTMLElement).closest(".overflow-wrap")) {
+            menuOpen = false;
         }
     }
 
@@ -60,10 +94,34 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     $: sections = groupBySection(readiness.leaves);
     $: assessedCount = readiness.leaves.filter((l) => l.assessed).length;
+    $: weakest = readiness.leaves
+        .filter((l) => l.assessed)
+        .map((l) => ({ leaf: l, weakness: 1 - l.fluency * 0.6 - l.application * 0.4 }))
+        .sort((a, b) => b.weakness - a.weakness)
+        .slice(0, 3);
 </script>
+
+<svelte:window on:keydown={onWindowKeydown} on:click={onWindowClick} />
 
 <div class="mcat-dashboard">
     <header class="readiness">
+        <div class="overflow-wrap">
+            <button
+                class="overflow-btn"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                on:click={() => (menuOpen = !menuOpen)}
+            >
+                ⋯
+            </button>
+            {#if menuOpen}
+                <div class="overflow-menu" role="menu">
+                    <button role="menuitem" on:click={openReset}>
+                        Reset progress…
+                    </button>
+                </div>
+            {/if}
+        </div>
         <div class="score-block">
             <div class="score">{readiness.readinessScore}</div>
             <div class="scale">/ 528</div>
@@ -78,17 +136,31 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     {Math.round(readiness.confidencePct)}% confidence
                 </span>
             </div>
-            <div class="conf-breakdown">
-                <span title="How much of the blueprint you've touched">
-                    coverage {pct(readiness.coverage)}
-                </span>
-                <span title="How many spaced attempts back the estimate">
-                    depth {pct(readiness.depth)}
-                </span>
-                <span title="How recent the evidence is">
-                    freshness {pct(readiness.freshness)}
-                </span>
-            </div>
+            <p class="rough-note">
+                Estimate is rough — you've assessed {pct(readiness.coverage)} of the
+                blueprint.
+                {#if refreshing}<span class="refreshing-note">refreshing…</span>{/if}
+            </p>
+            <details class="conf-details">
+                <summary>How is this computed?</summary>
+                <div class="conf-breakdown">
+                    <div class="conf-row">
+                        <span class="conf-row-label">coverage</span>
+                        <MeterBar value={readiness.coverage} tone="gold" />
+                        <span class="conf-row-val">{pct(readiness.coverage)}</span>
+                    </div>
+                    <div class="conf-row">
+                        <span class="conf-row-label">depth</span>
+                        <MeterBar value={readiness.depth} tone="gold" />
+                        <span class="conf-row-val">{pct(readiness.depth)}</span>
+                    </div>
+                    <div class="conf-row">
+                        <span class="conf-row-label">freshness</span>
+                        <MeterBar value={readiness.freshness} tone="gold" />
+                        <span class="conf-row-val">{pct(readiness.freshness)}</span>
+                    </div>
+                </div>
+            </details>
             <div class="assessed">
                 {assessedCount} / {readiness.leaves.length} subtopics assessed
             </div>
@@ -99,12 +171,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             </button>
             <button class="secondary" on:click={() => goto("/mcat/diagnostic")}>
                 Take diagnostic
-            </button>
-            <button class="ghost" disabled={recomputing} on:click={recompute}>
-                {recomputing ? "Recomputing…" : "Recompute"}
-            </button>
-            <button class="danger" on:click={() => (confirmingReset = true)}>
-                Reset progress
             </button>
         </div>
     </header>
@@ -140,6 +206,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     <button
                         class="cancel"
                         disabled={resetting}
+                        use:focusOnMount
                         on:click={() => (confirmingReset = false)}
                     >
                         Cancel
@@ -156,6 +223,37 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         </div>
     {/if}
 
+    {#if weakest.length}
+        <section class="next-opponents">
+            <h2>Next opponents</h2>
+            <div class="fight-cards">
+                {#each weakest as w (w.leaf.leafId)}
+                    {@const tier = tierFromMastery(w.weakness)}
+                    {@const spec = SPECIES[TIER_SPECIES[tier][0]]}
+                    <div class="fight-card">
+                        <div class="portrait">
+                            <FighterRig
+                                {spec}
+                                bulk={0.7}
+                                scale={0.5}
+                                facing="left"
+                                staticPose="stance-guard"
+                            />
+                        </div>
+                        <div class="tale">
+                            <span class="name">{w.leaf.name}</span>
+                            <MeterBar value={w.leaf.fluency} tone="red" />
+                            <MeterBar value={w.leaf.application} tone="gold" />
+                        </div>
+                        <button class="fight" on:click={() => goto("/mcat/study")}>
+                            Fight →
+                        </button>
+                    </div>
+                {/each}
+            </div>
+        </section>
+    {/if}
+
     {#each sections as section (section.label)}
         <section class="tag-section">
             <h2>{section.label}</h2>
@@ -163,8 +261,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 {#each section.leaves as leaf (leaf.leafId)}
                     <div class="leaf" class:unassessed={!leaf.assessed}>
                         <div class="leaf-head">
-                            <span class="leaf-id">{leaf.leafId}</span>
-                            <span class="leaf-name">{leaf.name}</span>
+                            <div class="leaf-title">
+                                <span class="leaf-name">{leaf.name}</span>
+                                <span class="leaf-id">{leaf.leafId}</span>
+                            </div>
                             {#if !leaf.isCars}
                                 <span
                                     class="gate"
@@ -173,7 +273,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                                         ? "Fluency gate open — application unlocked"
                                         : "Build rote fluency to unlock application"}
                                 >
-                                    {leaf.gateOpen ? "unlocked" : "locked"}
+                                    {leaf.gateOpen ? "unlocked" : "🔒 fluency first"}
                                 </span>
                             {/if}
                         </div>
@@ -181,23 +281,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                             {#if !leaf.isCars}
                                 <div class="bar-row">
                                     <span class="bar-label">fluency</span>
-                                    <div class="track">
-                                        <div
-                                            class="fill fluency"
-                                            style:width={pct(leaf.fluency)}
-                                        ></div>
-                                    </div>
+                                    <MeterBar value={leaf.fluency} tone="red" />
                                     <span class="bar-val">{pct(leaf.fluency)}</span>
                                 </div>
                             {/if}
                             <div class="bar-row">
                                 <span class="bar-label">application</span>
-                                <div class="track">
-                                    <div
-                                        class="fill application"
-                                        style:width={pct(leaf.application)}
-                                    ></div>
-                                </div>
+                                <MeterBar value={leaf.application} tone="gold" />
                                 <span class="bar-val">{pct(leaf.application)}</span>
                             </div>
                         </div>
@@ -209,6 +299,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 </div>
 
 <style lang="scss">
+    @use "./lib/mixins" as sf;
+
     .mcat-dashboard {
         max-width: 62rem;
         margin: 0 auto;
@@ -217,7 +309,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     .readiness {
         position: relative;
-        overflow: hidden;
+        overflow: visible;
         display: flex;
         flex-wrap: wrap;
         align-items: center;
@@ -225,14 +317,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         padding: 1.75rem 1.9rem;
         background: linear-gradient(
             135deg,
-            color-mix(in srgb, var(--sf-red-deep, #a3121c) 28%, var(--canvas-elevated, #161b24))
-                0%,
-            var(--canvas-elevated, #161b24) 55%
+            color-mix(in srgb, var(--sf-red-deep) 28%, var(--canvas-elevated)) 0%,
+            var(--canvas-elevated) 55%
         );
-        border: 1px solid var(--border, #ccc);
+        border: 1px solid var(--border);
         border-radius: 1rem;
         margin-bottom: 2rem;
-        box-shadow: 0 12px 34px rgb(0 0 0 / 45%);
+        box-shadow: var(--sf-shadow-2, 0 12px 34px rgb(0 0 0 / 45%));
     }
 
     /* judge's scorecard label + ring-corner accent bar (the signature) */
@@ -240,11 +331,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         content: "SCORECARD";
         position: absolute;
         top: 0.75rem;
-        right: 1.05rem;
+        right: 2.6rem;
         font-size: 0.62rem;
         letter-spacing: 0.28em;
         font-weight: 800;
-        color: var(--sf-dim, #9aa4b6);
+        color: var(--sf-dim);
         opacity: 0.7;
     }
 
@@ -255,10 +346,55 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         top: 0;
         bottom: 0;
         width: 4px;
-        background: linear-gradient(
-            var(--sf-red, #e11d2f),
-            var(--sf-red-deep, #a3121c)
-        );
+        background: linear-gradient(var(--sf-red), var(--sf-red-deep));
+        border-radius: 1rem 0 0 1rem;
+    }
+
+    .overflow-wrap {
+        position: absolute;
+        top: 0.6rem;
+        right: 0.75rem;
+        z-index: 2;
+    }
+
+    .overflow-btn {
+        @include sf.button-ghost;
+        width: 1.9rem;
+        height: 1.9rem;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+        line-height: 1;
+    }
+
+    .overflow-menu {
+        position: absolute;
+        top: 2.2rem;
+        right: 0;
+        z-index: 3;
+        min-width: 11rem;
+        padding: 0.35rem;
+        border-radius: var(--sf-r-sm);
+        border: 1px solid var(--border);
+        background: var(--canvas-elevated);
+        box-shadow: var(--sf-shadow-2, 0 12px 34px rgb(0 0 0 / 45%));
+        display: flex;
+        flex-direction: column;
+    }
+
+    .overflow-menu button {
+        @include sf.button-base;
+        padding: 0.5rem 0.7rem;
+        border: none;
+        background: none;
+        color: var(--sf-err);
+        text-align: left;
+        font-weight: 600;
+        &:hover {
+            background: color-mix(in srgb, var(--sf-err) 12%, transparent);
+        }
     }
 
     .score-block {
@@ -266,7 +402,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         align-items: baseline;
         gap: 0.4rem;
         padding-right: 1.5rem;
-        border-right: 1px solid var(--border-subtle, #eee);
+        border-right: 1px solid var(--border-subtle);
     }
 
     .score {
@@ -276,9 +412,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         letter-spacing: -0.02em;
         background: linear-gradient(
             140deg,
-            var(--sf-gold, #f5c451) 0%,
+            var(--sf-gold) 0%,
             #fff2cf 42%,
-            var(--sf-red, #e11d2f) 118%
+            var(--sf-red) 118%
         );
         -webkit-background-clip: text;
         background-clip: text;
@@ -307,66 +443,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     .actions .primary {
-        padding: 0.6rem 1.5rem;
-        border-radius: 0.55rem;
-        border: none;
-        background: linear-gradient(
-            180deg,
-            var(--sf-red, #e11d2f) 0%,
-            var(--sf-red-deep, #a3121c) 100%
-        );
-        color: var(--mcat-accent-fg, #fff);
-        font-weight: 800;
-        cursor: pointer;
-        box-shadow: 0 4px 14px rgba(225, 29, 47, 0.35);
-        transition: filter 0.12s ease;
-    }
-
-    .actions .primary:hover {
-        filter: brightness(1.08);
+        @include sf.button-primary;
     }
 
     .actions .secondary {
-        padding: 0.55rem 1rem;
-        border-radius: 0.5rem;
-        border: 1px solid var(--mcat-accent, #6366f1);
-        color: var(--mcat-accent, #6366f1);
-        background: none;
-        font-weight: 600;
-        cursor: pointer;
-    }
-
-    .actions .ghost {
-        padding: 0.4rem 1rem;
-        border-radius: 0.5rem;
-        border: 1px solid var(--border, #ccc);
-        background: none;
-        color: inherit;
-        opacity: 0.75;
-        cursor: pointer;
-    }
-
-    .actions .ghost:disabled {
-        opacity: 0.4;
-        cursor: default;
-    }
-
-    .actions .danger {
-        padding: 0.4rem 1rem;
-        border-radius: 0.5rem;
-        border: 1px solid color-mix(in srgb, #ef4444 45%, transparent);
-        background: none;
-        color: #ef4444;
-        font-weight: 600;
-        cursor: pointer;
-        transition:
-            background 0.12s ease,
-            border-color 0.12s ease;
-    }
-
-    .actions .danger:hover {
-        background: color-mix(in srgb, #ef4444 10%, transparent);
-        border-color: #ef4444;
+        @include sf.button-secondary;
     }
 
     .reset-overlay {
@@ -385,9 +466,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         width: 100%;
         padding: 1.5rem 1.6rem;
         border-radius: 0.9rem;
-        background: var(--canvas-elevated, #fff);
-        border: 1px solid var(--border, #ccc);
-        box-shadow: 0 12px 40px rgb(0 0 0 / 25%);
+        background: var(--canvas-elevated);
+        border: 1px solid var(--border);
+        box-shadow: var(--sf-shadow-2, 0 12px 40px rgb(0 0 0 / 25%));
     }
 
     .reset-dialog h2 {
@@ -404,7 +485,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     .reset-dialog .warn {
         font-weight: 700;
-        color: #ef4444;
+        color: var(--sf-err);
         opacity: 1;
     }
 
@@ -416,28 +497,19 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     .reset-actions .cancel {
-        padding: 0.55rem 1.1rem;
-        border-radius: 0.5rem;
-        border: 1px solid var(--border, #ccc);
-        background: none;
-        color: inherit;
-        font-weight: 600;
-        cursor: pointer;
+        @include sf.button-secondary;
     }
 
     .reset-actions .confirm-danger {
+        @include sf.button-base;
         padding: 0.55rem 1.1rem;
-        border-radius: 0.5rem;
         border: none;
-        background: #ef4444;
+        background: var(--sf-err);
         color: #fff;
         font-weight: 700;
-        cursor: pointer;
-        transition: filter 0.12s ease;
-    }
-
-    .reset-actions .confirm-danger:hover:not(:disabled) {
-        filter: brightness(1.08);
+        &:hover:not(:disabled) {
+            filter: brightness(1.08);
+        }
     }
 
     .reset-actions button:disabled {
@@ -466,23 +538,114 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         font-size: 0.9rem;
     }
 
+    .rough-note {
+        margin: 0;
+        font-size: 0.82rem;
+        color: var(--sf-dim);
+    }
+
+    .refreshing-note {
+        margin-left: 0.4rem;
+        color: var(--sf-dim);
+        font-style: italic;
+    }
+
+    .conf-details {
+        font-size: 0.82rem;
+        color: var(--sf-dim);
+    }
+
+    .conf-details summary {
+        cursor: pointer;
+        user-select: none;
+        @include sf.focusable;
+    }
+
     .conf-breakdown {
         display: flex;
-        flex-wrap: wrap;
-        gap: 0.35rem 1rem;
-        font-size: 0.8rem;
-        opacity: 0.7;
+        flex-direction: column;
+        gap: 0.35rem;
+        margin-top: 0.5rem;
+    }
+
+    .conf-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .conf-row-label {
+        width: 4.5rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-size: 0.7rem;
+    }
+
+    .conf-row-val {
+        width: 2.5rem;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .next-opponents {
+        margin-bottom: 1.5rem;
+    }
+
+    .fight-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+        gap: 0.75rem;
+    }
+
+    .fight-card {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.7rem 0.85rem;
+        background: var(--canvas-elevated);
+        border: 1px solid var(--border);
+        border-radius: 0.6rem;
+    }
+
+    .portrait {
+        flex-shrink: 0;
+        line-height: 0;
+    }
+
+    .tale {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+    }
+
+    .tale .name {
+        font-size: 0.85rem;
+        font-weight: 600;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .fight-card .fight {
+        @include sf.button-primary;
+        flex-shrink: 0;
+        padding: 0.5rem 0.9rem;
+        font-size: 0.85rem;
     }
 
     .tag-section {
         margin-bottom: 1.5rem;
     }
 
-    .tag-section h2 {
-        font-size: 1rem;
+    .tag-section h2,
+    .next-opponents h2 {
+        font-size: 13px;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
-        opacity: 0.7;
+        letter-spacing: 0.08em;
+        color: var(--sf-dim);
+        font-weight: 800;
         margin-bottom: 0.5rem;
     }
 
@@ -493,18 +656,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     .leaf {
-        background: var(--canvas-elevated, #fff);
-        border: 1px solid var(--border, #ddd);
+        background: var(--canvas-elevated);
+        border: 1px solid var(--border);
         border-radius: 0.6rem;
         padding: 0.7rem 0.85rem;
-        transition:
-            transform 0.12s ease,
-            box-shadow 0.12s ease;
-    }
-
-    .leaf:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
     }
 
     .leaf.unassessed {
@@ -513,37 +668,55 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     .leaf-head {
         display: flex;
-        align-items: baseline;
+        align-items: flex-start;
+        justify-content: space-between;
         gap: 0.4rem;
-        margin-bottom: 0.4rem;
     }
 
-    .leaf-id {
-        font-weight: 700;
+    .leaf-title {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
     }
 
     .leaf-name {
-        flex: 1;
         font-size: 0.85rem;
+        font-weight: 600;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
         overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+    }
+
+    .leaf-id {
+        display: inline-block;
+        font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+        font-size: 0.66rem;
+        color: var(--sf-dim);
     }
 
     .gate {
+        flex-shrink: 0;
         font-size: 0.66rem;
         font-weight: 800;
         letter-spacing: 0.04em;
         text-transform: uppercase;
         padding: 0.08rem 0.45rem;
         border-radius: 1rem;
-        background: color-mix(in srgb, var(--sf-red, #e11d2f) 16%, transparent);
-        color: #ff8088;
+        background: color-mix(in srgb, var(--sf-red) 16%, transparent);
+        color: var(--sf-err);
+        white-space: nowrap;
     }
 
     .gate.open {
-        background: color-mix(in srgb, var(--sf-gold, #f5c451) 15%, transparent);
-        color: var(--sf-gold, #f5c451);
+        background: color-mix(in srgb, var(--sf-gold) 15%, transparent);
+        color: var(--sf-gold);
+    }
+
+    .bars {
+        margin-top: 0.4rem;
     }
 
     .bar-row {
@@ -557,31 +730,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         width: 5rem;
         font-size: 0.75rem;
         opacity: 0.7;
-    }
-
-    .track {
-        flex: 1;
-        height: 0.5rem;
-        border-radius: 1rem;
-        background: color-mix(in srgb, currentColor 12%, transparent);
-        overflow: hidden;
-    }
-
-    .fill {
-        height: 100%;
-        border-radius: 1rem;
-    }
-
-    .fill.fluency {
-        background: linear-gradient(
-            90deg,
-            var(--sf-red-deep, #a3121c),
-            var(--sf-red, #e11d2f)
-        );
-    }
-
-    .fill.application {
-        background: linear-gradient(90deg, #b8860b, var(--sf-gold, #f5c451));
     }
 
     .bar-val {
