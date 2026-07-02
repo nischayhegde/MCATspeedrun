@@ -9,8 +9,12 @@ function fakeMatchMedia(reduced: boolean): void {
     vi.stubGlobal("matchMedia", (query: string) => ({
         matches: reduced && query.includes("reduce"),
         media: query,
-        addEventListener: () => {},
-        removeEventListener: () => {},
+        addEventListener: () => {
+            // no-op: morphPath only reads .matches, never subscribes
+        },
+        removeEventListener: () => {
+            // no-op: morphPath only reads .matches, never subscribes
+        },
     }));
 }
 
