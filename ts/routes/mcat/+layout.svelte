@@ -13,6 +13,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     ];
 
     $: path = $page.url.pathname.replace(/\/$/, "") || "/mcat";
+    $: showKbdLegend = path === "/mcat/study" || path === "/mcat/diagnostic";
 </script>
 
 <div class="mcat-shell">
@@ -47,7 +48,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             </svg>
             <span class="wordmark">Score<b>fighter</b></span>
         </button>
-        <div class="links">
+        {#if showKbdLegend}
+            <span class="kbd-legend">A–D answer · 0 not sure · ↵ confirm</span>
+        {/if}
+        <div class="links" class:with-legend={showKbdLegend}>
             {#each links as link (link.href)}
                 <button
                     class="nav-link"
@@ -78,6 +82,21 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         --sf-red-deep: #a3121c;
         --sf-gold: #f5c451;
 
+        /* semantic status — one source of truth for right/wrong/neutral */
+        --sf-ok: #2fd67a;
+        --sf-ok-deep: #1a9d55;
+        --sf-err: #ff5d6c; /* feedback red, deliberately NOT brand --sf-red */
+        --sf-warn: #f5a03c;
+        --sf-steel: #566073; /* neutral chrome: IDK, blocks, secondary */
+        /* geometry + elevation rhythm */
+        --sf-r-sm: 8px;
+        --sf-r-md: 12px;
+        --sf-r-lg: 16px;
+        --sf-shadow-1: 0 1px 3px rgb(0 0 0 / 30%);
+        --sf-shadow-2: 0 12px 34px rgb(0 0 0 / 45%);
+        /* keyboard-first focus */
+        --sf-focus: 0 0 0 2px var(--sf-canvas), 0 0 0 4px var(--sf-gold);
+
         /* Remap the Anki theme tokens the child screens consume so they inherit
            the dark boxing surfaces without touching every rule. */
         --canvas: var(--sf-canvas);
@@ -87,7 +106,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         --fg: var(--sf-text);
         --mcat-accent: var(--sf-red);
         --mcat-accent-fg: #ffffff;
-        --mcat-font: "Inter", system-ui, -apple-system, sans-serif;
+        --mcat-font: system-ui, "Segoe UI", -apple-system, sans-serif;
 
         /* App-shell: the shell owns the viewport height and the content area
            holds any scrolling, so the nav stays pinned. Study/Diagnostic fit
@@ -112,7 +131,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         display: flex;
         align-items: center;
         gap: 1rem;
-        padding: 0.7rem 1.25rem;
+        padding: 0.55rem 1.25rem;
         background: color-mix(in srgb, var(--sf-surface) 92%, transparent);
         border-bottom: 1px solid var(--sf-border);
         /* thin "ring rope" accent line under the bar */
@@ -154,10 +173,22 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         font-weight: 900;
     }
 
+    .kbd-legend {
+        margin-left: auto;
+        font-size: 11px;
+        color: var(--sf-dim);
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+    }
+
     .links {
         display: flex;
         gap: 0.25rem;
         margin-left: auto;
+    }
+
+    .links.with-legend {
+        margin-left: 1rem;
     }
 
     .nav-link {
@@ -180,8 +211,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     .nav-link.active {
-        color: #fff;
-        background: color-mix(in srgb, var(--sf-red) 22%, transparent);
+        color: var(--sf-text);
+        background: none;
+        box-shadow: inset 0 -2px 0 var(--sf-gold);
+        border-radius: 0;
     }
 
     .mcat-content {
