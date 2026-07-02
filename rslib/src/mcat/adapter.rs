@@ -401,7 +401,7 @@ impl Collection {
             .unwrap_or_default();
 
         let fields = note.fields();
-        let item = match kind {
+        let mut item = match kind {
             SelKind::Flashcard => anki_proto::scheduler::McatStudyItem {
                 card_id,
                 leaf_id: leaf_id.to_string(),
@@ -433,6 +433,14 @@ impl Collection {
                 ..Default::default()
             },
         };
+        item.difficulty = difficulty_from_tags(&note.tags) as u32;
+        item.difficulty_tagged = has_difficulty_tag(&note.tags);
+        item.fsrs_difficulty = self
+            .storage
+            .get_card(CardId(card_id))?
+            .and_then(|c| c.memory_state)
+            .map(|s| s.difficulty)
+            .unwrap_or(0.0);
         Ok(Some(item))
     }
 
@@ -609,6 +617,27 @@ fn difficulty_from_tags(tags: &[String]) -> u8 {
     marker_from_tags(tags, &["diff", "difficulty"])
 }
 
+/// True when the note carries an explicit `mcat::diff::N`/`mcat::difficulty::N`
+/// marker, so consumers can distinguish "authored medium" from "untagged".
+fn has_difficulty_tag(tags: &[String]) -> bool {
+    for t in tags {
+        let mut saw_key = false;
+        for part in t.split("::") {
+            let p = part.trim();
+            if saw_key && p.parse::<u8>().is_ok() {
+                return true;
+            }
+            if ["diff", "difficulty"]
+                .iter()
+                .any(|k| p.eq_ignore_ascii_case(k))
+            {
+                saw_key = true;
+            }
+        }
+    }
+    false
+}
+
 /// Per-item expected-time thresholds from the note's parser-scored reasoning
 /// complexity (`mcat::rc::N`) and calculation tedium (`mcat::ct::N`) tags.
 fn note_expected_latency(tags: &[String], kind: ItemKind) -> Latency {
@@ -657,6 +686,15 @@ mod tests {
         );
         assert_eq!(difficulty_from_tags(&["mcat::diff::9".to_string()]), 5); // clamp
         assert_eq!(difficulty_from_tags(&["mcat::cc::1B".to_string()]), 3); // default
+    }
+
+    #[test]
+    fn difficulty_tag_presence() {
+        assert!(has_difficulty_tag(&["mcat::diff::4".to_string()]));
+        assert!(has_difficulty_tag(&["mcat::difficulty::2".to_string()]));
+        assert!(!has_difficulty_tag(&["mcat::cc::1B".to_string()]));
+        assert!(!has_difficulty_tag(&["mcat::rc::5".to_string()]));
+        assert!(!has_difficulty_tag(&[]));
     }
 
     #[test]

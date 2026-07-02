@@ -563,6 +563,15 @@ message McatStudyItem {
   // Correct answer letter, e.g. "C" (empty for flashcards).
   string answer = 11;
   string explanation = 12;
+  // Authored difficulty from the mcat::diff::N tag, 1-5. 3 when untagged
+  // (see difficulty_tagged).
+  uint32 difficulty = 13;
+  // FSRS memory-state difficulty, raw 1.0-10.0. 0.0 = no memory state yet
+  // (new/reset card); consumers must fall back to `difficulty`.
+  float fsrs_difficulty = 14;
+  // True when the note actually carries an mcat::diff/difficulty tag, so
+  // the frontend can distinguish "authored medium" from "untagged".
+  bool difficulty_tagged = 15;
 }
 
 message McatStudyQueueResponse {
