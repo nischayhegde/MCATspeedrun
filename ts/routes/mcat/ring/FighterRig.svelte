@@ -157,17 +157,21 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         @include g.loop(2.9s);
         animation-name: guard-breathe;
     }
+    /* Boxing guard: upper arms drop below the shoulders and tuck in, forearms
+       fold up so the gloves ride at jaw height beside the head. Signs chosen so
+       the near-vertical forearms bring both gloves toward the face; the lead
+       (front) glove sits slightly forward of the rear glove. */
     .rig.stance-guard .arm.front {
-        transform: rotate(-38deg);
+        transform: rotate(82deg);
     }
     .rig.stance-guard .forearm.front {
-        transform: rotate(-55deg);
+        transform: rotate(158deg);
     }
     .rig.stance-guard .arm.back {
-        transform: rotate(30deg);
+        transform: rotate(-84deg);
     }
     .rig.stance-guard .forearm.back {
-        transform: rotate(70deg);
+        transform: rotate(-116deg);
     }
     @keyframes guard-breathe {
         0%, 100% {
