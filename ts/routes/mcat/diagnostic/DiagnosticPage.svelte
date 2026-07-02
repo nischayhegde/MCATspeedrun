@@ -11,47 +11,88 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     } from "@generated/anki/scheduler_pb";
     import { answerMcatCard, recomputeMcatLeafStates } from "@generated/backend";
 
-    import Boxer from "../Boxer.svelte";
-    import type { BoxerAction } from "../boxer";
+    import ChoiceGrid from "../lib/ChoiceGrid.svelte";
+    import IdkButton from "../lib/IdkButton.svelte";
+    import QuestionCard from "../lib/QuestionCard.svelte";
+    import SessionHeader from "../lib/SessionHeader.svelte";
+    import FightRing from "../ring/FightRing.svelte";
+    import type { FightEvent } from "../ring/machine";
+    import { type OpponentInstance, opponentFor } from "../ring/roster";
 
     export let items: McatStudyItem[];
+    // Pre-exam readiness snapshot, for the before -> after delta on the results
+    // screen. Null when the loader couldn't compute one (e.g. no content yet).
+    export let before: McatReadinessResponse | null = null;
 
     const LETTERS = ["A", "B", "C", "D"];
-
-    // During the exam the hero works a heavy bag: every answer lands a punch
-    // (the ring cycles jab/cross/hook/uppercut for variety). Because it's the
-    // same event regardless of correctness, it never leaks the answer — the
-    // PRD's no-mid-exam-feedback rule holds. The two-fighter outcome still plays
-    // on the results screen.
-    let boxerAction: BoxerAction = "ready";
-    let boxerTrigger = 0;
-    $: boxerMode = phase === "exam" ? "bag" : "spar";
-
-    $: userScale = readiness
-        ? 0.9 + Math.max(0, Math.min(100, readiness.readinessPct)) / 100 * 0.3
-        : 1;
-    function oppScaleFor(it: McatStudyItem): number {
-        const bandRaw = Number(((it.cardId % 5n) + 5n) % 5n); // 0..4, stable
-        return 0.85 + (bandRaw / 4) * 0.55;
-    }
-    $: oppScale = item ? oppScaleFor(item) : 1.1;
-    // Sentinel choice: never equals a real answer (A–D), so it always grades as
+    // Sentinel choice: never equals a real answer (A-D), so it always grades as
     // incorrect. Lets honest test-takers avoid inflating the score by guessing.
     const IDK = "__idk__";
 
+    // During the exam the hero works a heavy bag: every locked answer lands the
+    // same "bag-hit" punch (the ring cycles jab/cross/hook/uppercut for variety).
+    // Because it's the same event regardless of correctness, it never leaks the
+    // answer — the PRD's no-mid-exam-feedback rule holds. The two-fighter outcome
+    // plays only on the results screen.
+    let ringEvent: FightEvent | null = null;
+    let ringTrigger = 0;
+    function fire(kind: FightEvent["kind"]): void {
+        ringTrigger += 1;
+        ringEvent = { kind, trigger: ringTrigger };
+    }
+
     type Phase = "intro" | "exam" | "submitting" | "results";
     let phase: Phase = "intro";
+    $: ringMode = phase === "results" ? "spar" : "bag";
 
     let index = 0;
     let startedAt = Date.now();
     let submittedCount = 0;
     let readiness: McatReadinessResponse | null = null;
+    // Two-step commit: the first activation of a choice arms `pending` (gold
+    // ring); a second activation of the SAME choice — or Enter — locks it in.
+    // A different choice just re-arms. Nothing is written until it's locked.
+    let pending: string | null = null;
+    let confirmOpen = false;
+    let keepGoingBtn: HTMLButtonElement | undefined;
 
-    // per-section running tallies for the results screen
+    // per-section running tallies for the results screen. `answerTick` is bumped
+    // on every locked answer so the reactive derivations below re-run (mutating
+    // the Map in place doesn't, on its own, trigger Svelte reactivity).
     const perSection = new Map<string, { correct: number; total: number }>();
+    let answerTick = 0;
+
+    // Fixed mid-tier opponent for the results tableau: SPECIES.hobnail at tier 3.
+    // (difficulty 3, untagged-FSRS → tierFor returns 3, whose only species is
+    // hobnail.) Frozen — purely cosmetic backdrop for the outcome flourish.
+    const resultsOpponent: OpponentInstance = opponentFor(
+        { cardId: 3n, difficulty: 3, fsrsDifficulty: 0, difficultyTagged: true },
+        new Map(),
+    );
 
     $: item = items[index] as McatStudyItem | undefined;
     $: total = items.length;
+
+    // A single snapshot of the tallies, recomputed whenever a new answer locks
+    // (the `answerTick` argument is what makes this reactive statement re-run;
+    // mutating the Map in place doesn't, on its own, trigger Svelte reactivity).
+    // Everything on the results screen derives from this snapshot.
+    interface SectionRow {
+        section: string;
+        correct: number;
+        total: number;
+        pct: number;
+    }
+    function snapshot(_tick: number): SectionRow[] {
+        return [...perSection.entries()].map(([section, v]) => ({
+            section,
+            correct: v.correct,
+            total: v.total,
+            pct: v.total ? Math.round((v.correct / v.total) * 100) : 0,
+        }));
+    }
+    $: sectionRows = snapshot(answerTick);
+    $: answeredCount = sectionRows.reduce((n, r) => n + r.total, 0);
 
     function begin(): void {
         if (total === 0) {
@@ -59,24 +100,36 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         }
         phase = "exam";
         index = 0;
+        pending = null;
         startedAt = Date.now();
     }
 
-    async function choose(letter: string): Promise<void> {
-        if (!item) {
+    // First step: arm (or re-arm) the pending selection. Any letter switches it.
+    function select(choice: string): void {
+        if (phase !== "exam" || !item) {
             return;
         }
-        const correct = letter === item.answer;
+        pending = choice;
+    }
+
+    // Second step: commit the armed choice. Writes the answer, lands a bag punch,
+    // and advances (or finishes on the last question).
+    async function lock(): Promise<void> {
+        if (phase !== "exam" || !item || pending === null) {
+            return;
+        }
+        const choice = pending;
+        const correct = choice === item.answer;
         const bucket = perSection.get(item.section) ?? { correct: 0, total: 0 };
         bucket.total += 1;
         if (correct) {
             bucket.correct += 1;
         }
         perSection.set(item.section, bucket);
+        answerTick += 1;
 
-        // Land a punch on the bag for every answer (the ring varies which one).
-        boxerAction = "punch";
-        boxerTrigger += 1;
+        // Land a punch on the bag for every locked answer (the ring varies which).
+        fire("bag-hit");
 
         const ms = Math.min(Date.now() - startedAt, 10 * 60 * 1000);
         // fire-and-forget scoring; no feedback is shown mid-exam
@@ -89,6 +142,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             submittedCount += 1;
         });
 
+        pending = null;
         if (index + 1 >= total) {
             await finish();
         } else {
@@ -97,52 +151,88 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         }
     }
 
+    function onChoose(letter: string): void {
+        // Activating the already-pending choice locks it; otherwise it arms.
+        if (pending === letter) {
+            void lock();
+        } else {
+            select(letter);
+        }
+    }
+
+    function openConfirm(): void {
+        confirmOpen = true;
+        // Focus "Keep going" so an accidental Enter doesn't submit.
+        void Promise.resolve().then(() => keepGoingBtn?.focus());
+    }
+
     async function finish(): Promise<void> {
+        confirmOpen = false;
         phase = "submitting";
-        boxerAction = "idle";
         // wait for the in-flight answer writes to land, then recompute
         const started = Date.now();
-        while (submittedCount < total && Date.now() - started < 30_000) {
+        while (submittedCount < answeredCount && Date.now() - started < 30_000) {
             await new Promise((r) => setTimeout(r, 100));
         }
         readiness = await recomputeMcatLeafStates({});
         phase = "results";
         // Single outcome flourish, framed positively even when the score is low
-        // (productive failure -> back to training).
-        const pct = readiness.readinessPct;
-        boxerAction = pct >= 60 ? "punch" : pct >= 40 ? "block" : "jumprope";
-        boxerTrigger += 1;
+        // (productive failure -> back to training). Computed straight from the
+        // tallies (not the reactive `pct`, whose flush timing we don't want to
+        // depend on) so the tableau matches the headline exactly.
+        const tallies = [...perSection.values()];
+        const answered = tallies.reduce((n, v) => n + v.total, 0);
+        const correct = tallies.reduce((n, v) => n + v.correct, 0);
+        const outcomePct = answered ? Math.round((correct / answered) * 100) : 0;
+        // Thresholds per spec: >=60 win, 40-59 draw, <40 loss.
+        if (outcomePct >= 60) {
+            fire("results-win");
+        } else if (outcomePct >= 40) {
+            fire("results-draw");
+        } else {
+            fire("results-loss");
+        }
     }
 
     function onKeydown(event: KeyboardEvent): void {
-        if (phase !== "exam" || !item) {
+        if (phase !== "exam" || !item || confirmOpen) {
             return;
         }
         const key = event.key.toLowerCase();
-        if (LETTERS.map((l) => l.toLowerCase()).includes(key)) {
-            void choose(key.toUpperCase());
+        if (key === "enter") {
+            if (pending !== null) {
+                event.preventDefault();
+                void lock();
+            }
+        } else if (LETTERS.map((l) => l.toLowerCase()).includes(key)) {
+            onChoose(key.toUpperCase());
         } else if (key === "0") {
-            void choose(IDK);
+            onChoose(IDK);
         }
     }
 
-    $: sectionRows = [...perSection.entries()].map(([section, v]) => ({
-        section,
-        correct: v.correct,
-        total: v.total,
-        pct: v.total ? Math.round((v.correct / v.total) * 100) : 0,
-    }));
+    // Results tallies. correctTotal/answeredTotal drive the headline; the exam
+    // never reveals correctness before this screen.
+    // Worst-first: the sections most in need of work lead the list.
+    $: rankedRows = [...sectionRows].sort((a, b) => a.pct - b.pct);
+    $: correctTotal = sectionRows.reduce((n, r) => n + r.correct, 0);
+    $: answeredTotal = sectionRows.reduce((n, r) => n + r.total, 0);
+    $: pct = answeredTotal ? Math.round((correctTotal / answeredTotal) * 100) : 0;
+    $: delta = readiness && before
+        ? readiness.readinessScore - before.readinessScore
+        : 0;
 </script>
 
 <svelte:window on:keydown={onKeydown} />
 
 <div class="diagnostic">
-    <Boxer
-        action={boxerAction}
-        trigger={boxerTrigger}
-        mode={boxerMode}
-        {userScale}
-        {oppScale}
+    <FightRing
+        mode={ringMode}
+        event={ringEvent}
+        opponent={phase === "results" ? resultsOpponent : null}
+        marquee=""
+        showPips={false}
+        height={88}
     />
     {#if phase === "intro"}
         <div class="panel intro">
@@ -167,44 +257,51 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             {/if}
         </div>
     {:else if phase === "exam" && item}
-        <header class="progress-row">
-            <button class="quit" on:click={finish}>Finish early</button>
-            <div class="progress-track">
-                <div
-                    class="progress-fill"
-                    style:width={`${(index / total) * 100}%`}
-                ></div>
+        <SessionHeader
+            exitLabel="Finish early"
+            progress={index / total}
+            counter={`${index + 1} / ${total}`}
+            on:exit={openConfirm}
+        />
+
+        <QuestionCard image={item.image} front={item.front} />
+
+        <ChoiceGrid
+            choices={item.choices}
+            lettersOnly={!!item.image}
+            graded={false}
+            {pending}
+            on:choose={(e) => onChoose(e.detail.letter)}
+        />
+
+        <IdkButton
+            selected={pending === IDK}
+            on:choose={() => onChoose(IDK)}
+        />
+
+        <p class="lock-hint" class:show={pending !== null && index < 3}>
+            press again to lock in
+        </p>
+
+        {#if confirmOpen}
+            <div class="confirm-scrim">
+                <div class="confirm" role="dialog" aria-modal="true" aria-label="Submit diagnostic">
+                    <p class="confirm-title">
+                        Submit now? {answeredCount} answered · {total - answeredCount} unanswered.
+                    </p>
+                    <div class="confirm-actions">
+                        <button
+                            class="secondary"
+                            bind:this={keepGoingBtn}
+                            on:click={() => (confirmOpen = false)}
+                        >
+                            Keep going
+                        </button>
+                        <button class="primary" on:click={finish}>Submit</button>
+                    </div>
+                </div>
             </div>
-            <span class="counter">{index + 1} / {total}</span>
-        </header>
-
-        <div class="card question">
-            {#if item.image}
-                <!-- The imported image is the full question composite (stem +
-                     lettered choices), so it's the source of truth; the text stem
-                     would only duplicate it. -->
-                <div class="qimg"><img src={item.image} alt="question" /></div>
-            {:else if item.front}
-                <div class="qtext"><p class="stem">{item.front}</p></div>
-            {/if}
-        </div>
-
-        <div class="choices" class:letters={!!item.image}>
-            {#each LETTERS as letter (letter)}
-                <button class="choice" on:click={() => choose(letter)}>
-                    <span class="letter">{letter}</span>
-                    {#if !item.image && item.choices[LETTERS.indexOf(letter)]}
-                        <span class="choice-text">
-                            {item.choices[LETTERS.indexOf(letter)]}
-                        </span>
-                    {/if}
-                </button>
-            {/each}
-        </div>
-
-        <button class="idk" on:click={() => choose(IDK)}>
-            I don't know the answer to this question
-        </button>
+        {/if}
     {:else if phase === "submitting"}
         <div class="panel">
             <h1>Scoring…</h1>
@@ -213,24 +310,24 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     {:else if phase === "results" && readiness}
         <div class="panel results">
             <h1>Diagnostic complete</h1>
-            <div class="score-block">
-                <div class="score">{readiness.readinessScore}</div>
-                <div class="scale">/ 528</div>
-            </div>
-            <p class="confidence">
-                {Math.round(readiness.readinessPct)}% blueprint mastery · ±{readiness.confidenceBand}
-                pts confidence
+            <div class="headline">{correctTotal} / {answeredTotal} correct ({pct}%)</div>
+            <p class="delta">
+                Readiness: {before?.readinessScore ?? "—"} → {readiness.readinessScore}
+                ({delta >= 0 ? "+" + delta : delta}) / 528 · ±{readiness.confidenceBand} pts
             </p>
 
             <h2>By section</h2>
             <div class="section-grid">
-                {#each sectionRows as row (row.section)}
+                {#each rankedRows as row (row.section)}
                     <div class="section-row">
                         <span class="section-name">{row.section}</span>
                         <div class="track">
                             <div class="fill" style:width={`${row.pct}%`}></div>
                         </div>
                         <span class="section-val">{row.correct}/{row.total}</span>
+                        <button class="train" on:click={() => goto("/mcat/study")}>
+                            Train this →
+                        </button>
                     </div>
                 {/each}
             </div>
@@ -248,6 +345,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 </div>
 
 <style lang="scss">
+    @use "../lib/mixins" as sf;
+
     .diagnostic {
         height: 100%;
         max-width: 46rem;
@@ -274,7 +373,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         display: flex;
         flex-direction: column;
         gap: 0.9rem;
-        box-shadow: 0 1px 3px rgb(0 0 0 / 5%);
+        box-shadow: var(--sf-shadow-1);
     }
 
     h1 {
@@ -290,188 +389,59 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     .empty {
-        color: #ef4444;
+        color: var(--sf-err, #ff5d6c);
     }
 
-    .progress-row {
+    /* Dim, unobtrusive nudge that only shows on the first few questions while a
+       choice is armed. Reinforces the two-step commit without nagging. */
+    .lock-hint {
         flex-shrink: 0;
+        margin: 0;
+        min-height: 1em;
+        text-align: center;
+        font-size: 12px;
+        color: var(--sf-dim);
+        opacity: 0;
+        transition: opacity 0.15s ease;
+    }
+    .lock-hint.show {
+        opacity: 1;
+    }
+
+    /* Confirm dialog for "Finish early". */
+    .confirm-scrim {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
         display: flex;
         align-items: center;
-        gap: 0.75rem;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.55);
     }
-
-    .quit {
-        border: none;
-        background: none;
-        cursor: pointer;
-        opacity: 0.6;
-    }
-
-    .progress-track {
-        flex: 1;
-        height: 0.4rem;
-        border-radius: 1rem;
-        background: color-mix(in srgb, currentColor 12%, transparent);
-        overflow: hidden;
-    }
-
-    .progress-fill {
-        height: 100%;
-        background: linear-gradient(
-            90deg,
-            var(--sf-red-deep, #a3121c),
-            var(--sf-red, #e11d2f)
-        );
-        border-radius: 1rem;
-        transition: width 0.2s ease;
-    }
-
-    .counter {
-        font-size: 0.85rem;
-        opacity: 0.7;
-        font-variant-numeric: tabular-nums;
-    }
-
-    .card {
+    .confirm {
+        max-width: 22rem;
+        margin: 1rem;
+        padding: 1.4rem;
+        border-radius: var(--sf-r-md, 12px);
         background: var(--canvas-elevated, #fff);
         border: 1px solid var(--border, #ccc);
-        border-radius: 0.75rem;
-        padding: 1rem;
-        box-shadow: 0 1px 3px rgb(0 0 0 / 5%);
-    }
-
-    /* Question image fills leftover height and scales to fit — no page scroll. */
-    .card.question {
-        flex: 1 1 auto;
-        min-height: 0;
+        box-shadow: var(--sf-shadow-2);
         display: flex;
         flex-direction: column;
-        gap: 0.5rem;
-        overflow: hidden;
+        gap: 1rem;
     }
-
-    /* Text-only questions scroll inside the card if the stem is very long, so
-       the page itself never scrolls. */
-    .card.question .qtext {
-        flex: 1 1 auto;
-        min-height: 0;
-        align-self: stretch;
-        overflow: auto;
-    }
-
-    .card.question .qtext .stem {
+    .confirm-title {
         margin: 0;
-        white-space: pre-wrap;
-        font-size: 1.05rem;
-        line-height: 1.5;
+        font-weight: 700;
     }
-
-    /* Fit the question to the available WIDTH so text stays legible. A tall
-       passage then scrolls inside this pane — the page itself still never
-       scrolls, and the choices below stay pinned in view. */
-    .card.question .qimg {
-        flex: 1 1 auto;
-        min-height: 0;
-        overflow: auto;
-    }
-
-    .card.question .qimg img {
-        display: block;
-        width: 100%;
-        height: auto;
-        margin: 0 auto;
-        border-radius: 0.5rem;
-        background: #fff;
-    }
-
-    .card img {
-        max-width: 100%;
-        border-radius: 0.5rem;
-    }
-
-    .stem {
-        white-space: pre-wrap;
-    }
-
-    .choices {
-        flex-shrink: 0;
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-        gap: 0.5rem;
-    }
-
-    /* When the composite image already lists the options, the answer row is a
-       compact scantron of letters rather than repeating each option's text. */
-    .choices.letters {
-        grid-template-columns: repeat(4, 1fr);
-    }
-
-    .choices.letters .choice {
-        justify-content: center;
-        padding: 0.7rem;
-        font-size: 1.1rem;
-        font-weight: 800;
-    }
-
-    .choice {
+    .confirm-actions {
         display: flex;
-        align-items: center;
         gap: 0.5rem;
-        padding: 0.7rem 0.9rem;
-        border: 1px solid var(--border, #ccc);
-        border-radius: 0.5rem;
-        background: var(--canvas-elevated, #fff);
-        color: inherit;
-        cursor: pointer;
-        text-align: left;
-        transition:
-            border-color 0.12s ease,
-            background 0.12s ease;
+        justify-content: flex-end;
     }
 
-    .choice:hover {
-        border-color: var(--mcat-accent, #3b82f6);
-        background: color-mix(in srgb, var(--mcat-accent, #3b82f6) 8%, transparent);
-    }
-
-    .choice .letter {
-        font-weight: 800;
-        color: var(--sf-red, #e11d2f);
-    }
-
-    .idk {
-        flex-shrink: 0;
-        width: 100%;
-        margin-top: 0.15rem;
-        padding: 0.7rem 0.9rem;
-        border: 1px dashed var(--border, #ccc);
-        border-radius: 0.5rem;
-        background: none;
-        color: inherit;
-        opacity: 0.7;
-        cursor: pointer;
-        text-align: center;
-        font-size: 0.9rem;
-        transition:
-            border-color 0.12s ease,
-            background 0.12s ease,
-            opacity 0.12s ease;
-    }
-
-    .idk:hover {
-        opacity: 1;
-        border-color: #ef4444;
-        background: color-mix(in srgb, #ef4444 8%, transparent);
-    }
-
-    .results .score-block {
-        display: flex;
-        align-items: baseline;
-        gap: 0.4rem;
-    }
-
-    .results .score {
-        font-size: 3.5rem;
+    .results .headline {
+        font-size: 44px;
         font-weight: 900;
         line-height: 1;
         letter-spacing: -0.02em;
@@ -484,11 +454,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent;
+        text-shadow: 0 2px 18px rgba(245, 196, 81, 0.12);
     }
 
-    .results .scale {
-        font-size: 1.1rem;
-        opacity: 0.6;
+    .delta {
+        margin: 0;
+        opacity: 0.75;
+        font-variant-numeric: tabular-nums;
     }
 
     .section-grid {
@@ -531,6 +503,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         font-variant-numeric: tabular-nums;
     }
 
+    .train {
+        @include sf.button-ghost;
+        flex-shrink: 0;
+        font-size: 0.8rem;
+        white-space: nowrap;
+    }
+
     .actions {
         display: flex;
         gap: 0.5rem;
@@ -538,25 +517,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     .primary {
-        padding: 0.6rem 1.5rem;
-        border-radius: 0.55rem;
-        border: none;
-        background: linear-gradient(
-            180deg,
-            var(--sf-red, #e11d2f) 0%,
-            var(--sf-red-deep, #a3121c) 100%
-        );
-        color: white;
-        font-weight: 800;
-        cursor: pointer;
-        box-shadow: 0 4px 14px rgba(225, 29, 47, 0.3);
+        @include sf.button-primary;
     }
 
     .secondary {
-        padding: 0.6rem 1.2rem;
-        border-radius: 0.5rem;
-        border: 1px solid var(--border, #ccc);
-        background: none;
-        cursor: pointer;
+        @include sf.button-secondary;
     }
 </style>
