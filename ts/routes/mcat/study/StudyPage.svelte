@@ -8,8 +8,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     import { goto } from "$app/navigation";
 
     import type { McatStudyItem } from "@generated/anki/scheduler_pb";
-    import { McatStudyItem_Kind } from "@generated/anki/scheduler_pb";
-    import { answerMcatCard } from "@generated/backend";
+    import {
+        AnswerMcatCardTypedResponse_Verdict,
+        McatStudyItem_Kind,
+    } from "@generated/anki/scheduler_pb";
+    import { answerMcatCard, answerMcatCardTyped } from "@generated/backend";
 
     import ChoiceGrid from "../lib/ChoiceGrid.svelte";
     import IdkButton from "../lib/IdkButton.svelte";
@@ -46,9 +49,20 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     let index = 0;
-    let revealed = false;
     let chosen: string | null = null;
     let answering = false;
+
+    // Typed short-answer flashcard flow (replaces reveal + self-grade buttons).
+    type FlashPhase = "prompt" | "grading" | "graded" | "error";
+    let flashPhase: FlashPhase = "prompt";
+    let typedAnswer = "";
+    let verdict: AnswerMcatCardTypedResponse_Verdict =
+        AnswerMcatCardTypedResponse_Verdict.INCORRECT;
+    let feedback = "";
+    let gaveUp = false;
+    let gradeError = "";
+    let submittedMs = 0;
+
     let startedAt = Date.now();
     let now = Date.now();
     let timerHidden = false;
@@ -60,6 +74,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     $: isMcq = item?.kind === McatStudyItem_Kind.MCQ;
     $: done = index >= items.length;
     $: correct = chosen !== null && item !== undefined && chosen === item.answer;
+    $: verdictLabel = gaveUp
+        ? "Didn't know — marked Again"
+        : verdict === AnswerMcatCardTypedResponse_Verdict.CORRECT
+          ? "Correct"
+          : verdict === AnswerMcatCardTypedResponse_Verdict.PARTIAL
+            ? "Partially correct"
+            : "Incorrect";
     $: opponent = item && isMcq ? opponentFor(item, tierCache) : null;
     // Hero grows with readiness; capped so it never crowds the strip.
     $: heroScale = 0.9 + Math.max(0, Math.min(100, readinessPct)) / 100 * 0.3;
@@ -129,25 +150,56 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         answering = false;
     }
 
-    async function rate(selfRating: number): Promise<void> {
-        if (!item || answering) {
+    // Submit the typed answer (or give up) for LLM grading. Blocks until a
+    // verdict arrives — on failure the card stays unanswered and the same
+    // submission can be retried (block-until-graded, no self-grade fallback).
+    async function submitTyped(giveUp: boolean): Promise<void> {
+        if (!item || flashPhase === "grading" || flashPhase === "graded") {
             return;
         }
-        answering = true;
-        await answerMcatCard({
-            cardId: item.cardId,
-            correct: selfRating > 1,
-            millisecondsTaken: elapsedMs(),
-            selfRating,
-        });
-        fire((["rate-again", "rate-hard", "rate-good", "rate-easy"] as const)[selfRating - 1]);
-        answering = false;
-        next();
+        if (flashPhase === "prompt") {
+            // freeze latency at first submit; retries reuse it
+            submittedMs = elapsedMs();
+        }
+        gaveUp = giveUp || typedAnswer.trim().length === 0;
+        flashPhase = "grading";
+        gradeError = "";
+        try {
+            const resp = await answerMcatCardTyped({
+                cardId: item.cardId,
+                typedAnswer,
+                millisecondsTaken: submittedMs,
+                gaveUp,
+            });
+            verdict = resp.verdict;
+            feedback = resp.feedback;
+            flashPhase = "graded";
+            fire(
+                (["rate-again", "rate-hard", "rate-good", "rate-easy"] as const)[resp.grade - 1],
+            );
+        } catch (err) {
+            flashPhase = "error";
+            gradeError = err instanceof Error ? err.message : String(err);
+        }
+    }
+
+    function onAnswerKeydown(e: KeyboardEvent): void {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            submitTyped(false);
+        } else if (e.key === "Escape") {
+            e.preventDefault();
+            submitTyped(true);
+        }
     }
 
     function next(): void {
         index += 1;
-        revealed = false;
+        flashPhase = "prompt";
+        typedAnswer = "";
+        feedback = "";
+        gaveUp = false;
+        gradeError = "";
         chosen = null;
         startedAt = Date.now();
         now = Date.now();
@@ -171,12 +223,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             } else if (chosen !== null && !answering && (key === " " || key === "enter")) {
                 next();
             }
-        } else {
-            if (!revealed && (key === " " || key === "enter")) {
-                revealed = true;
-            } else if (revealed && ["1", "2", "3", "4"].includes(key)) {
-                rate(Number(key));
-            }
+        } else if (flashPhase === "graded" && (key === " " || key === "enter")) {
+            event.preventDefault();
+            next();
         }
     }
 </script>
@@ -249,29 +298,60 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             {/if}
         {:else}
             <QuestionCard front={item.front} alt={`${item.leafName} prompt`} center />
-            {#if revealed}
+            {#if flashPhase === "prompt" || flashPhase === "error"}
+                <div class="typed-entry">
+                    <!-- svelte-ignore a11y-autofocus -->
+                    <textarea
+                        bind:value={typedAnswer}
+                        rows="3"
+                        placeholder="Describe this term from memory…"
+                        autofocus
+                        on:keydown={onAnswerKeydown}
+                    ></textarea>
+                    <div class="typed-actions">
+                        <button class="primary" on:click={() => submitTyped(false)}>
+                            Submit <KeyHint key="↵" />
+                        </button>
+                        <IdkButton on:choose={() => submitTyped(true)} />
+                    </div>
+                </div>
+                {#if flashPhase === "error"}
+                    <div class="feedback grade-error">
+                        <strong>Grading failed — your answer is kept.</strong>
+                        <p>{gradeError}</p>
+                        <button class="primary" on:click={() => submitTyped(gaveUp)}>
+                            Retry
+                        </button>
+                    </div>
+                {/if}
+            {:else}
                 <div class="answer">
                     <hr />
                     <p class="back">{item.back}</p>
                 </div>
-                <div class="ratings">
-                    <button class="rating again" on:click={() => rate(1)}>
-                        Again <KeyHint key="1" />
-                    </button>
-                    <button class="rating hard" on:click={() => rate(2)}>
-                        Hard <KeyHint key="2" />
-                    </button>
-                    <button class="rating good" on:click={() => rate(3)}>
-                        Good <KeyHint key="3" />
-                    </button>
-                    <button class="rating easy" on:click={() => rate(4)}>
-                        Easy <KeyHint key="4" />
-                    </button>
-                </div>
-            {:else}
-                <button class="primary reveal" on:click={() => (revealed = true)}>
-                    Show answer <KeyHint key="␣" />
-                </button>
+                {#if !gaveUp && typedAnswer.trim()}
+                    <p class="typed-echo"><span>Your answer:</span> {typedAnswer}</p>
+                {/if}
+                {#if flashPhase === "grading"}
+                    <div class="grading">Grading your answer…</div>
+                {:else}
+                    <div
+                        class="feedback"
+                        class:correct={!gaveUp &&
+                            verdict === AnswerMcatCardTypedResponse_Verdict.CORRECT}
+                        class:partial={!gaveUp &&
+                            verdict === AnswerMcatCardTypedResponse_Verdict.PARTIAL}
+                        class:idk={gaveUp}
+                    >
+                        <strong>{verdictLabel}</strong>
+                        {#if feedback}
+                            <p>{feedback}</p>
+                        {/if}
+                        <button class="primary" on:click={next}>
+                            Continue <KeyHint key="␣" />
+                        </button>
+                    </div>
+                {/if}
             {/if}
         {/if}
     {:else}
@@ -371,50 +451,68 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         @include sf.button-primary;
     }
 
-    .reveal {
-        align-self: center;
-    }
-
-    .ratings {
+    .typed-entry {
         flex-shrink: 0;
         display: flex;
-        gap: 0.5rem;
-        justify-content: center;
+        flex-direction: column;
+        gap: 0.6rem;
     }
 
-    .rating {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.4rem;
-        padding: 0.5rem 1.1rem;
+    .typed-entry textarea {
+        width: 100%;
+        box-sizing: border-box;
+        resize: vertical;
+        min-height: 4.5rem;
+        padding: 0.6rem 0.75rem;
         border-radius: var(--sf-r-sm);
         border: 1px solid var(--sf-border);
         background: none;
         color: inherit;
-        cursor: pointer;
-        font-weight: 600;
-        transition: border-color 0.12s ease, background 0.12s ease;
+        font: inherit;
+        line-height: 1.5;
         @include sf.focusable;
-        &:hover {
-            background: color-mix(in srgb, var(--sf-text) 6%, transparent);
+    }
+
+    .typed-actions {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+
+    .typed-echo {
+        flex-shrink: 0;
+        margin: 0;
+        font-size: 0.95rem;
+        opacity: 0.85;
+
+        span {
+            font-weight: 600;
         }
     }
 
-    .rating.again {
-        color: var(--sf-err);
+    .grading {
+        flex-shrink: 0;
+        padding: 0.6rem 1rem;
+        font-weight: 600;
+        animation: sf-grading-pulse 1.2s ease-in-out infinite;
     }
 
-    .rating.hard {
-        color: var(--sf-warn);
+    @keyframes sf-grading-pulse {
+        0%,
+        100% {
+            opacity: 1;
+        }
+        50% {
+            opacity: 0.45;
+        }
     }
 
-    .rating.good {
-        color: var(--sf-text);
-        border-color: var(--sf-steel);
+    .feedback.partial {
+        border-left-color: var(--sf-warn);
     }
 
-    .rating.easy {
-        color: var(--sf-ok);
+    .grade-error {
+        border-left-color: var(--sf-err);
     }
 
     .complete {
