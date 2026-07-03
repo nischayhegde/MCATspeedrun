@@ -1,6 +1,8 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+use std::collections::HashSet;
+
 use rusqlite::params;
 use rusqlite::Row;
 
@@ -63,6 +65,49 @@ impl SqliteStorage {
         Ok(())
     }
 
+    /// Record one LLM/objectively-graded typed answer, linked to the revlog
+    /// row it graded. `insert or replace` keeps re-answers idempotent.
+    pub(crate) fn add_mcat_answer_log(
+        &self,
+        revlog_id: i64,
+        card_id: i64,
+        verdict: &str,
+        typed_answer: &str,
+        feedback: &str,
+        model: &str,
+    ) -> Result<()> {
+        self.db
+            .prepare_cached(
+                "insert or replace into mcat_answer_log \
+                 (revlog_id, card_id, verdict, typed_answer, feedback, model) \
+                 values (?, ?, ?, ?, ?, ?)",
+            )?
+            .execute(params![
+                revlog_id,
+                card_id,
+                verdict,
+                typed_answer,
+                feedback,
+                model
+            ])?;
+        Ok(())
+    }
+
+    /// Revlog ids of this card's verdict-backed (objectively graded) reviews.
+    pub(crate) fn mcat_answer_log_ids_for_card(&self, card_id: i64) -> Result<HashSet<i64>> {
+        self.db
+            .prepare_cached("select revlog_id from mcat_answer_log where card_id = ?")?
+            .query_map([card_id], |r| r.get(0))?
+            .collect::<std::result::Result<HashSet<i64>, _>>()
+            .map_err(Into::into)
+    }
+
+    /// Delete every answer-log row (used by the full progress reset).
+    pub(crate) fn clear_mcat_answer_log(&self) -> Result<()> {
+        self.db.execute("delete from mcat_answer_log", [])?;
+        Ok(())
+    }
+
     pub(crate) fn upsert_mcat_leaf_state(&self, s: &LeafState, now_ms: i64) -> Result<()> {
         self.db
             .prepare_cached(include_str!("upsert.sql"))?
@@ -77,5 +122,44 @@ impl SqliteStorage {
                 now_ms,
             ])?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use crate::collection::Collection;
+
+    #[test]
+    fn answer_log_roundtrip() {
+        let col = Collection::new();
+        col.storage
+            .add_mcat_answer_log(123, 7, "partial", "my answer", "missed X", "gpt-5-mini")
+            .unwrap();
+        col.storage
+            .add_mcat_answer_log(456, 7, "correct", "", "", "")
+            .unwrap();
+        col.storage
+            .add_mcat_answer_log(789, 8, "incorrect", "", "", "")
+            .unwrap();
+        assert_eq!(
+            col.storage.mcat_answer_log_ids_for_card(7).unwrap(),
+            HashSet::from([123, 456])
+        );
+        // idempotent on the same revlog row
+        col.storage
+            .add_mcat_answer_log(123, 7, "correct", "edited", "", "gpt-5-mini")
+            .unwrap();
+        assert_eq!(
+            col.storage.mcat_answer_log_ids_for_card(7).unwrap().len(),
+            2
+        );
+        col.storage.clear_mcat_answer_log().unwrap();
+        assert!(col
+            .storage
+            .mcat_answer_log_ids_for_card(7)
+            .unwrap()
+            .is_empty());
     }
 }
