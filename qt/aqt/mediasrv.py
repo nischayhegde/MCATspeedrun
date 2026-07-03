@@ -393,6 +393,9 @@ def _enforce_access_policy() -> None:
                 "denied LAN request: %s %s", request.method, request.path
             )
             abort(403)
+        if request.endpoint != "handle_request":
+            logger.warning("denied LAN request to %s route", request.endpoint)
+            abort(403)
         return
     if os.environ.get("ANKI_API_HOST") != "0.0.0.0":
         host = request.headers.get("Host", "").lower()

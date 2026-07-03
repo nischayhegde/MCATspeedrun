@@ -268,6 +268,16 @@ class TestLanGate:
         )
         assert resp.status_code != 403
 
+    def test_favicon_from_lan_with_token_denied(self, lan_active) -> None:
+        # Even a paired device may only reach the handle_request endpoint;
+        # the standalone favicon route serves no collection media, so a valid
+        # token must not unlock it.
+        resp = self._client().get(
+            "/favicon.ico",
+            headers={"Host": "192.168.1.50:8045", "Authorization": lan_active},
+        )
+        assert resp.status_code == 403
+
 
 class _StubBackend:
     def __init__(self) -> None:
