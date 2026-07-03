@@ -12,6 +12,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         McatReadinessResponse,
     } from "@generated/anki/scheduler_pb";
     import { recomputeMcatLeafStates, resetMcatProgress } from "@generated/backend";
+    import LanServerModal from "./lib/LanServerModal.svelte";
     import MeterBar from "./lib/MeterBar.svelte";
 
     export let readiness: McatReadinessResponse;
@@ -20,6 +21,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     let confirmingReset = false;
     let resetting = false;
     let menuOpen = false;
+    let lanOpen = false;
 
     onMount(() => {
         // Fire-and-forget: never block first paint on a recompute round-trip.
@@ -170,6 +172,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             <button class="secondary" on:click={() => goto("/mcat/diagnostic")}>
                 Take diagnostic
             </button>
+            <button class="secondary" on:click={() => (lanOpen = true)}>
+                Phone access
+            </button>
             {#if !diagnosticDone}
                 <p class="locked-hint">Take the diagnostic to unlock Study.</p>
             {/if}
@@ -221,6 +226,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 </div>
             </div>
         </div>
+    {/if}
+
+    {#if lanOpen}
+        <LanServerModal on:close={() => (lanOpen = false)} />
     {/if}
 
     {#each sections as section (section.label)}
