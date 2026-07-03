@@ -30,6 +30,12 @@ service FrontendService {
 
   // Save colour picker's custom colour palette
   rpc SaveCustomColours(generic.Empty) returns (generic.Empty);
+  // Start the MCAT LAN API server (phone access); returns connection info.
+  rpc StartLanServer(generic.Empty) returns (LanServerStatus);
+  // Stop the MCAT LAN API server.
+  rpc StopLanServer(generic.Empty) returns (LanServerStatus);
+  // Current LAN server state, without changing it.
+  rpc GetLanServerStatus(generic.Empty) returns (LanServerStatus);
 }
 
 service BackendFrontendService {}
@@ -42,4 +48,15 @@ message SchedulingStatesWithContext {
 message SetSchedulingStatesRequest {
   string key = 1;
   scheduler.SchedulingStates states = 2;
+}
+
+message LanServerStatus {
+  bool running = 1;
+  // Primary LAN IPv4 of this machine, e.g. "192.168.1.23".
+  string host_ip = 2;
+  uint32 port = 3;
+  // Bearer token the phone must present. Generated once, kept per profile.
+  string token = 4;
+  // Non-empty when starting failed (e.g. port already in use).
+  string error = 5;
 }
