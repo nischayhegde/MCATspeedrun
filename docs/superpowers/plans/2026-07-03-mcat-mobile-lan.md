@@ -209,6 +209,7 @@ class TestLanRequestAllowed:
             "_anki/pages/mcat",
             "_anki/legacyPageData",
             "_addons/addon/code.js",
+            "_app/immutable/entry.js",
         ],
     )
     def test_internal_gets_denied(self, path: str) -> None:
@@ -346,9 +347,12 @@ def lan_request_allowed(method: str, path: str) -> bool:
             path[len(_API_PREFIX) :] in ALLOWED_LAN_METHODS
         )
     if method == "GET":
-        # Media files are served from the root path; internal pages/addons
-        # stay localhost-only.
-        return not path.startswith(("_anki/", "_addons/")) and path != "favicon.ico"
+        # Coarse filter only: media files are served from the root path, but
+        # mediasrv aliases sveltekit pages (mcat/, graphs/, _app/, ...) to
+        # internal bundle paths AFTER this check, so the authoritative
+        # media-only rule lives in mediasrv's handle_request (it denies any
+        # LAN GET that does not resolve to a collection-media file).
+        return not path.startswith(("_anki/", "_addons/", "_app/"))
     return False
 
 
@@ -423,6 +427,7 @@ class LanServer(threading.Thread):
         self.server.task_dispatcher.shutdown()
 
 
+_lock = threading.Lock()
 _current: LanServer | None = None
 _current_token: str | None = None
 
@@ -430,32 +435,37 @@ _current_token: str | None = None
 def start(app, token: str, port: int = DEFAULT_LAN_PORT) -> str | None:
     "Start the singleton LAN server; error message, or None on success/no-op."
     global _current, _current_token
-    if _current:
+    with _lock:
+        if _current:
+            return None
+        server = LanServer(app, port=port)
+        error = server.start_and_wait()
+        if error:
+            return error
+        _current = server
+        _current_token = token
         return None
-    server = LanServer(app, port=port)
-    error = server.start_and_wait()
-    if error:
-        return error
-    _current = server
-    _current_token = token
-    return None
 
 
 def stop() -> None:
     global _current, _current_token
-    if _current:
-        _current.shutdown()
-    _current = None
-    _current_token = None
+    with _lock:
+        if _current:
+            _current.shutdown()
+        _current = None
+        _current_token = None
 
 
 def is_running() -> bool:
-    return _current is not None
+    with _lock:
+        return _current is not None
 
 
 def has_lan_access(auth_header: str | None) -> bool:
     "True iff the header carries the active LAN token."
-    return _current is not None and token_matches(auth_header, _current_token)
+    with _lock:
+        token = _current_token if _current else None
+    return token_matches(auth_header, token)
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
@@ -586,6 +596,23 @@ class TestLanGate:
         )
         assert resp.status_code == 403
 
+    def test_sveltekit_alias_get_denied(self, lan_active) -> None:
+        # "mcat/..." is aliased to internal bundle content during request
+        # extraction; a LAN token must not fetch it even though the raw
+        # path looks media-like.
+        resp = self._client().get(
+            "/mcat/_app/immutable/chunks/foo.js",
+            headers={"Host": "192.168.1.50:8045", "Authorization": lan_active},
+        )
+        assert resp.status_code == 403
+
+    def test_graphs_page_get_denied(self, lan_active) -> None:
+        resp = self._client().get(
+            "/graphs/index.html",
+            headers={"Host": "192.168.1.50:8045", "Authorization": lan_active},
+        )
+        assert resp.status_code == 403
+
     def test_localhost_requests_unaffected(self, lan_active) -> None:
         # No LAN token: existing localhost rules still apply (page 404s
         # normally rather than 403).
@@ -593,7 +620,77 @@ class TestLanGate:
             "/_anki/pages/nonexistent", headers={"Host": "127.0.0.1:40000"}
         )
         assert resp.status_code == 404
+
+    def test_favicon_from_lan_without_token_denied(self, lan_active) -> None:
+        # /favicon.ico is its own Flask route; the before_request hook must
+        # still gate it so the LAN listener has no ungated endpoints.
+        resp = self._client().get(
+            "/favicon.ico", headers={"Host": "192.168.1.50:8045"}
+        )
+        assert resp.status_code == 403
+
+    def test_favicon_from_localhost_allowed(self, lan_active) -> None:
+        resp = self._client().get(
+            "/favicon.ico", headers={"Host": "127.0.0.1:40000"}
+        )
+        assert resp.status_code != 403
+
+    def test_favicon_from_lan_with_token_denied(self, lan_active) -> None:
+        # Even a paired device may only reach the handle_request endpoint;
+        # the standalone favicon route serves no collection media, so a valid
+        # token must not unlock it.
+        resp = self._client().get(
+            "/favicon.ico",
+            headers={"Host": "192.168.1.50:8045", "Authorization": lan_active},
+        )
+        assert resp.status_code == 403
+
+
+class _StubBackend:
+    def __init__(self) -> None:
+        self.called_with: bytes | None = None
+
+    def compute_mcat_readiness_raw(self, data: bytes) -> bytes:
+        self.called_with = data
+        return b"\x08\x01"  # arbitrary non-empty protobuf-ish bytes
+
+
+class _StubCol:
+    def __init__(self) -> None:
+        self._backend = _StubBackend()
+
+
+class TestLanFineGrainedGrant:
+    """The MCAT RPCs must survive _check_dynamic_request_permissions, whose
+    new LAN branch grants access. With col=None the request 404s before that
+    check runs, so a truthy stub col is needed to exercise the grant path."""
+
+    @pytest.fixture
+    def lan_active_with_col(self, monkeypatch):
+        monkeypatch.setattr(lan_server, "_current", object())
+        monkeypatch.setattr(lan_server, "_current_token", "testtoken")
+        mw = _StubMw()
+        mw.col = _StubCol()
+        monkeypatch.setattr(aqt, "mw", mw)
+        yield "Bearer testtoken"
+
+    def test_mcat_rpc_granted_end_to_end(self, lan_active_with_col) -> None:
+        from aqt.mediasrv import app
+
+        resp = app.test_client().post(
+            "/_anki/computeMcatReadiness",
+            headers={
+                "Authorization": lan_active_with_col,
+                "Content-Type": "application/binary",
+            },
+            data=b"",
+        )
+        assert resp.status_code == 200
+        assert resp.data == b"\x08\x01"
 ```
+
+Note: `_StubMw` (defined earlier in this file) must set `self.col = None` in
+`__init__` so the fixture can override it; it already does per Task 3 Step 1.
 
 Note: `test_localhost_requests_unaffected` exercises the pre-existing localhost path; if `/_anki/pages/nonexistent` turns out to short-circuit differently (e.g. 500 because `aqt.mw.col` is None), assert only `!= 403` — the point is that localhost is not blocked by the new gate.
 
@@ -615,17 +712,40 @@ In `qt/aqt/mediasrv.py`:
 from aqt import lan_server
 ```
 
-(b) Replace the top of `handle_request` (currently lines 382–392):
+(b) The access gate must apply to **every** route, not just the catch-all
+`handle_request` — otherwise the standalone `/favicon.ico` route
+(`mediasrv.py:189`) serves unauthenticated on the LAN listener. Move the
+coarse gate into a `before_request` hook, and keep only the authoritative
+post-extraction media rule inside `handle_request`.
+
+Add a `before_request` hook (place it just above `handle_request`, ~line 380):
 
 ```python
-@app.route("/<path:pathin>", methods=["GET", "POST"])
-def handle_request(pathin: str) -> Response:
+@app.before_request
+def _enforce_access_policy() -> None:
+    # Runs for every route (including /favicon.ico), so the LAN listener has
+    # no ungated endpoints. handle_request adds the authoritative media-only
+    # rule for LAN GETs after request extraction.
     if lan_server.has_lan_access(request.headers.get("Authorization")):
         # phone client on the LAN: restricted to the MCAT API + media files
-        if not lan_server.lan_request_allowed(request.method, pathin):
-            logger.warning("denied LAN request: %s /%s", request.method, pathin)
+        if not lan_server.lan_request_allowed(
+            request.method, request.path.lstrip("/")
+        ):
+            logger.warning(
+                "denied LAN request: %s %s", request.method, request.path
+            )
             abort(403)
-    elif os.environ.get("ANKI_API_HOST") != "0.0.0.0":
+        # All legitimate LAN traffic (MCAT RPCs + media) flows through the
+        # catch-all handle_request endpoint, which applies the authoritative
+        # media-only rule. Standalone routes (favicon, Flask's /static) never
+        # serve collection media, so deny them even with a valid token — this
+        # keeps handle_request the sole authority and closes routes the coarse
+        # filter can't see.
+        if request.endpoint != "handle_request":
+            logger.warning("denied LAN request to %s route", request.endpoint)
+            abort(403)
+        return
+    if os.environ.get("ANKI_API_HOST") != "0.0.0.0":
         host = request.headers.get("Host", "").lower()
         origin = request.headers.get("Origin", "").lower()
         allowed_hosts = tuple(f"{h}:" for h in _LOCALHOST_HOSTS)
@@ -637,7 +757,37 @@ def handle_request(pathin: str) -> Response:
             abort(403)
 ```
 
-(rest of the function unchanged)
+Then replace the body of `handle_request` (currently the localhost gate at
+lines 382–392 plus `req = _extract_request(pathin)`) so the gate is gone and
+only the authoritative media check remains:
+
+```python
+@app.route("/<path:pathin>", methods=["GET", "POST"])
+def handle_request(pathin: str) -> Response:
+    req = _extract_request(pathin)
+    logger.debug("%s /%s", flask.request.method, pathin)
+
+    # Authoritative LAN media rule (the coarse gate lives in
+    # _enforce_access_policy): mediasrv aliases sveltekit pages
+    # (mcat/, graphs/, _app/, ...) to internal bundle paths during
+    # extraction, so a raw-path filter cannot classify them. Serve LAN GETs
+    # only when the request resolved to a collection-media file; NotFound
+    # passes through so "collection not open"/missing files still 404.
+    if (
+        lan_server.has_lan_access(request.headers.get("Authorization"))
+        and request.method == "GET"
+        and not isinstance(req, NotFound)
+        and not (
+            isinstance(req, LocalFileRequest)
+            and req.root == aqt.mw.col.media.dir()
+        )
+    ):
+        logger.warning("denied LAN GET of non-media path: /%s", pathin)
+        abort(403)
+```
+
+(the dispatch chain — `try: … isinstance(req, …)` — is unchanged; there must
+still be exactly ONE `_extract_request` call)
 
 (c) In `_check_dynamic_request_permissions` (~line 835), after the `if _have_api_access(): return` block, add:
 
