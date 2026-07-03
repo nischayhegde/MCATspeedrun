@@ -56,19 +56,26 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     async function copyCode(): Promise<void> {
-        await navigator.clipboard.writeText(pairingCode);
-        copied = true;
-        setTimeout(() => (copied = false), 1500);
+        try {
+            await navigator.clipboard.writeText(pairingCode);
+            copied = true;
+            setTimeout(() => (copied = false), 1500);
+        } catch {
+            // Clipboard access can fail (e.g. permissions); the code stays selectable in the input.
+        }
+    }
+
+    function onWindowKeydown(e: KeyboardEvent): void {
+        if (e.key === "Escape") {
+            dispatch("close");
+        }
     }
 </script>
 
-<div
-    class="lan-overlay"
-    role="button"
-    tabindex="-1"
-    on:click={() => dispatch("close")}
-    on:keydown={(e) => e.key === "Escape" && dispatch("close")}
->
+<svelte:window on:keydown={onWindowKeydown} />
+
+<!-- svelte-ignore a11y-click-events-have-key-events -->
+<div class="lan-overlay" role="button" tabindex="-1" on:click={() => dispatch("close")}>
     <div
         class="lan-dialog"
         role="dialog"
