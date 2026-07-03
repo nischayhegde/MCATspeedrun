@@ -60,6 +60,7 @@ class TestLanRequestAllowed:
             "_anki/pages/mcat",
             "_anki/legacyPageData",
             "_addons/addon/code.js",
+            "_app/immutable/entry.js",
         ],
     )
     def test_internal_gets_denied(self, path: str) -> None:

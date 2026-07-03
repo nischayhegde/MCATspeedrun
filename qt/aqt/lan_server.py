@@ -50,9 +50,12 @@ def lan_request_allowed(method: str, path: str) -> bool:
             path[len(_API_PREFIX) :] in ALLOWED_LAN_METHODS
         )
     if method == "GET":
-        # Media files are served from the root path; internal pages/addons
-        # stay localhost-only.
-        return not path.startswith(("_anki/", "_addons/")) and path != "favicon.ico"
+        # Coarse filter only: media files are served from the root path, but
+        # mediasrv aliases sveltekit pages (mcat/, graphs/, _app/, ...) to
+        # internal bundle paths AFTER this check, so the authoritative
+        # media-only rule lives in mediasrv's handle_request (it denies any
+        # LAN GET that does not resolve to a collection-media file).
+        return not path.startswith(("_anki/", "_addons/", "_app/"))
     return False
 
 
@@ -127,6 +130,7 @@ class LanServer(threading.Thread):
         self.server.task_dispatcher.shutdown()
 
 
+_lock = threading.Lock()
 _current: LanServer | None = None
 _current_token: str | None = None
 
@@ -134,29 +138,34 @@ _current_token: str | None = None
 def start(app, token: str, port: int = DEFAULT_LAN_PORT) -> str | None:
     "Start the singleton LAN server; error message, or None on success/no-op."
     global _current, _current_token
-    if _current:
+    with _lock:
+        if _current:
+            return None
+        server = LanServer(app, port=port)
+        error = server.start_and_wait()
+        if error:
+            return error
+        _current = server
+        _current_token = token
         return None
-    server = LanServer(app, port=port)
-    error = server.start_and_wait()
-    if error:
-        return error
-    _current = server
-    _current_token = token
-    return None
 
 
 def stop() -> None:
     global _current, _current_token
-    if _current:
-        _current.shutdown()
-    _current = None
-    _current_token = None
+    with _lock:
+        if _current:
+            _current.shutdown()
+        _current = None
+        _current_token = None
 
 
 def is_running() -> bool:
-    return _current is not None
+    with _lock:
+        return _current is not None
 
 
 def has_lan_access(auth_header: str | None) -> bool:
     "True iff the header carries the active LAN token."
-    return _current is not None and token_matches(auth_header, _current_token)
+    with _lock:
+        token = _current_token if _current else None
+    return token_matches(auth_header, token)
