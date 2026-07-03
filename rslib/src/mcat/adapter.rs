@@ -21,6 +21,9 @@ use fsrs::FSRS;
 use fsrs::FSRS5_DEFAULT_DECAY;
 
 use super::aggregate::score_leaf;
+use super::grader::grade_typed;
+use super::grader::verdict_str;
+use super::grader::GradedAnswer;
 use super::leaf_tag::is_cars;
 use super::leaf_tag::leaf_id_from_tags;
 use super::model::*;
@@ -556,28 +559,99 @@ impl Collection {
         };
 
         self.transact(crate::ops::Op::AnswerCard, |col| {
-            let states = col.get_scheduling_states(card_id)?;
-            let new_state = match grade {
-                Grade::Again => states.again,
-                Grade::Hard => states.hard,
-                Grade::Good => states.good,
-                Grade::Easy => states.easy,
-            };
-            let mut answer: crate::scheduler::answering::CardAnswer =
-                anki_proto::scheduler::CardAnswer {
-                    card_id: card_id.into(),
-                    current_state: Some(states.current.into()),
-                    new_state: Some(new_state.into()),
-                    rating: grade.as_u8() as i32 - 1,
-                    milliseconds_taken,
-                    answered_at_millis: TimestampMillis::now().into(),
-                }
-                .into();
-            answer.from_queue = false;
-            col.answer_card_inner(&mut answer)
+            mcat_apply_grade(col, card_id, grade, milliseconds_taken)
         })?;
         Ok(grade)
     }
+
+    /// Term + canonical description of a rote flashcard, for the LLM grader.
+    pub(crate) fn mcat_flashcard_fields(&mut self, card_id: CardId) -> Result<(String, String)> {
+        let card = self.storage.get_card(card_id)?.or_not_found(card_id)?;
+        let note = self
+            .storage
+            .get_note(card.note_id)?
+            .or_not_found(card.note_id)?;
+        let nt = self
+            .get_notetype(note.notetype_id)?
+            .or_not_found(note.notetype_id)?;
+        let field = |names: &[&str]| -> String {
+            for (idx, f) in nt.fields.iter().enumerate() {
+                if names.iter().any(|n| f.name.eq_ignore_ascii_case(n)) {
+                    return note.fields().get(idx).cloned().unwrap_or_default();
+                }
+            }
+            String::new()
+        };
+        let fields = note.fields();
+        Ok((
+            non_empty_or(field(&["Front", "Question"]), fields.first()),
+            non_empty_or(field(&["Back", "Answer"]), fields.get(1)),
+        ))
+    }
+
+    /// Answer a flashcard from a graded typed answer: map the verdict to the
+    /// FSRS grade, run the normal answer flow, and persist the verdict-backed
+    /// answer-log row — all in one transaction, so a crash never half-applies
+    /// a review.
+    pub(crate) fn mcat_answer_card_typed(
+        &mut self,
+        card_id: CardId,
+        milliseconds_taken: u32,
+        graded: &GradedAnswer,
+        typed_answer: &str,
+    ) -> Result<Grade> {
+        let grade = grade_typed(graded.verdict, milliseconds_taken);
+        self.transact(crate::ops::Op::AnswerCard, |col| {
+            mcat_apply_grade(col, card_id, grade, milliseconds_taken)?;
+            // answer_card_inner just appended this card's newest revlog row;
+            // link the log entry to it so recompute can prove objectivity
+            let revlog_id = col
+                .storage
+                .get_revlog_entries_for_card(card_id)?
+                .iter()
+                .map(|e| e.id.0)
+                .max()
+                .or_invalid("revlog row missing after answer")?;
+            col.storage.add_mcat_answer_log(
+                revlog_id,
+                card_id.0,
+                verdict_str(graded.verdict),
+                typed_answer,
+                &graded.feedback,
+                &graded.model,
+            )
+        })?;
+        Ok(grade)
+    }
+}
+
+/// Apply an FSRS grade to a card inside the ambient transaction: pick the
+/// scheduling state matching `grade` and run the normal answer flow (revlog
+/// row with taken millis, leaf-state hook).
+fn mcat_apply_grade(
+    col: &mut Collection,
+    card_id: CardId,
+    grade: Grade,
+    milliseconds_taken: u32,
+) -> Result<()> {
+    let states = col.get_scheduling_states(card_id)?;
+    let new_state = match grade {
+        Grade::Again => states.again,
+        Grade::Hard => states.hard,
+        Grade::Good => states.good,
+        Grade::Easy => states.easy,
+    };
+    let mut answer: crate::scheduler::answering::CardAnswer = anki_proto::scheduler::CardAnswer {
+        card_id: card_id.into(),
+        current_state: Some(states.current.into()),
+        new_state: Some(new_state.into()),
+        rating: grade.as_u8() as i32 - 1,
+        milliseconds_taken,
+        answered_at_millis: TimestampMillis::now().into(),
+    }
+    .into();
+    answer.from_queue = false;
+    col.answer_card_inner(&mut answer)
 }
 
 /// Turn an Image field into a root-absolute media URL the webview can load.
@@ -680,7 +754,40 @@ fn non_empty_or(primary: String, fallback: Option<&String>) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::super::grader::Verdict;
     use super::*;
+    use crate::tests::NoteAdder;
+
+    #[test]
+    fn typed_answer_writes_revlog_and_answer_log() {
+        let mut col = Collection::new();
+        let mut note = NoteAdder::basic(&mut col)
+            .fields(&[
+                "Glycolysis",
+                "Splits glucose into two pyruvate; net 2 ATP + 2 NADH",
+            ])
+            .add(&mut col);
+        note.tags.push("mcat::cc::1D".into());
+        col.update_note(&mut note).unwrap();
+        let card = col.get_first_card();
+
+        let graded = GradedAnswer {
+            verdict: Verdict::Partial,
+            feedback: "Missed the ATP yield.".into(),
+            model: "test-model".into(),
+        };
+        let grade = col
+            .mcat_answer_card_typed(card.id, 21_000, &graded, "splits glucose")
+            .unwrap();
+        assert_eq!(grade, Grade::Hard);
+
+        let entries = col.storage.get_revlog_entries_for_card(card.id).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].button_chosen, 2);
+        assert_eq!(entries[0].taken_millis, 21_000);
+        let ids = col.storage.mcat_answer_log_ids_for_card(card.id.0).unwrap();
+        assert!(ids.contains(&entries[0].id.0));
+    }
 
     #[test]
     fn media_url_extracts_from_img_tag() {

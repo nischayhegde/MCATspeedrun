@@ -23,6 +23,10 @@ use fsrs::FSRSReview;
 use fsrs::FSRS;
 
 use crate::backend::Backend;
+use crate::mcat::grader::gave_up_result;
+use crate::mcat::grader::AnswerGrader;
+use crate::mcat::grader::OpenAiGrader;
+use crate::mcat::grader::Verdict;
 use crate::prelude::*;
 use crate::scheduler::fsrs::params::ComputeParamsRequest;
 use crate::scheduler::new::NewCardDueOrder;
@@ -542,6 +546,45 @@ impl crate::services::BackendSchedulerService for Backend {
                 req.min_entries.try_into().unwrap(),
                 req.target_path.as_ref(),
             )
+        })
+    }
+
+    fn answer_mcat_card_typed(
+        &self,
+        input: scheduler::AnswerMcatCardTypedRequest,
+    ) -> Result<scheduler::AnswerMcatCardTypedResponse> {
+        let card_id = CardId(input.card_id);
+        let gave_up = input.gave_up || input.typed_answer.trim().is_empty();
+        // Read the term + canonical description up front so the collection
+        // lock is not held during the (retried, possibly slow) HTTP call.
+        let (front, back) = self.with_col(|col| col.mcat_flashcard_fields(card_id))?;
+        let graded = if gave_up {
+            gave_up_result()
+        } else {
+            OpenAiGrader::new(self.web_client(), self.runtime_handle()).grade_answer(
+                &front,
+                &back,
+                &input.typed_answer,
+            )?
+        };
+        let grade = self.with_col(|col| {
+            col.mcat_answer_card_typed(
+                card_id,
+                input.milliseconds_taken,
+                &graded,
+                &input.typed_answer,
+            )
+        })?;
+        Ok(scheduler::AnswerMcatCardTypedResponse {
+            verdict: match graded.verdict {
+                Verdict::Incorrect => {
+                    scheduler::answer_mcat_card_typed_response::Verdict::Incorrect
+                }
+                Verdict::Partial => scheduler::answer_mcat_card_typed_response::Verdict::Partial,
+                Verdict::Correct => scheduler::answer_mcat_card_typed_response::Verdict::Correct,
+            } as i32,
+            feedback: graded.feedback,
+            grade: grade.as_u8() as u32,
         })
     }
 }

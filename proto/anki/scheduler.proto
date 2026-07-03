@@ -97,6 +97,12 @@ service BackendSchedulerService {
   rpc FsrsBenchmark(FsrsBenchmarkRequest) returns (FsrsBenchmarkResponse);
   // Used for exporting revlogs for algorithm research.
   rpc ExportDataset(ExportDatasetRequest) returns (generic.Empty);
+  // Grade a typed MCAT flashcard answer with the LLM, then answer the card:
+  // one atomic step from the client's perspective. Blocks until grading
+  // succeeds or retries are exhausted; on failure the card is left
+  // unanswered so the client can retry the same submission.
+  rpc AnswerMcatCardTyped(AnswerMcatCardTypedRequest)
+      returns (AnswerMcatCardTypedResponse);
 }
 
 message SchedulingState {
@@ -591,6 +597,30 @@ message AnswerMcatCardRequest {
 message AnswerMcatCardResponse {
   // The FSRS grade that was applied (1=Again 2=Hard 3=Good 4=Easy).
   uint32 grade = 1;
+}
+
+message AnswerMcatCardTypedRequest {
+  int64 card_id = 1;
+  // The learner's typed description of the term.
+  string typed_answer = 2;
+  // Time from card shown to submit, in ms (the grading wait is excluded).
+  uint32 milliseconds_taken = 3;
+  // True for "I don't know": no LLM call; graded Again.
+  bool gave_up = 4;
+}
+
+message AnswerMcatCardTypedResponse {
+  enum Verdict {
+    INCORRECT = 0;
+    PARTIAL = 1;
+    CORRECT = 2;
+  }
+  Verdict verdict = 1;
+  // One-line LLM note on what was missing/wrong (empty when fully correct or
+  // gave up).
+  string feedback = 2;
+  // The FSRS grade applied (1=Again 2=Hard 3=Good 4=Easy).
+  uint32 grade = 3;
 }
 
 message McatReadinessResponse {

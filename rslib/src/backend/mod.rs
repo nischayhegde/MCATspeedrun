@@ -126,7 +126,7 @@ impl Backend {
         )
     }
 
-    fn runtime_handle(&self) -> runtime::Handle {
+    pub(crate) fn runtime_handle(&self) -> runtime::Handle {
         self.runtime
             .get_or_init(|| {
                 runtime::Builder::new_multi_thread()
@@ -172,7 +172,7 @@ impl Backend {
         Err(AnkiError::InvalidCertificateFormat)
     }
 
-    fn web_client(&self) -> Client {
+    pub(crate) fn web_client(&self) -> Client {
         // currently limited to http1, as nginx doesn't support http2 proxies
         let mut web_client = self.web_client.lock().unwrap();
 
