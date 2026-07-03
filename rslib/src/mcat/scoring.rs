@@ -71,26 +71,46 @@ fn evidence(s: &LeafState) -> f32 {
     (s.attempts * s.freshness).max(0.0)
 }
 
+/// Sibling-pooled shrinkage prior: what this leaf's foundational-concept
+/// siblings' evidence suggests, blended with the global prior. With no
+/// sibling evidence this is exactly [`PRIOR_MASTERY`]; with strong siblings a
+/// thin leaf reads like its concept-mates instead of like an unknown.
+fn pooled_prior(leaf: &Leaf, states: &HashMap<String, LeafState>) -> f32 {
+    let mut n_sum = 0.0f32;
+    let mut m_sum = 0.0f32;
+    for sib in leaves() {
+        if sib.fc != leaf.fc || sib.id == leaf.id {
+            continue;
+        }
+        if let Some(s) = states.get(sib.id) {
+            let n = evidence(s);
+            n_sum += n;
+            m_sum += n * mastery(sib.is_cars, s);
+        }
+    }
+    (m_sum + FC_PRIOR_PSEUDO_N * PRIOR_MASTERY) / (n_sum + FC_PRIOR_PSEUDO_N)
+}
+
 /// Evidence-shrunk mastery: with little evidence the raw estimate (which can't
-/// tell a lucky fast guess from real skill) is pulled toward a low neutral
-/// prior; with `n >> N_TARGET` it converges to the raw value.
-pub fn mastery_adjusted(is_cars: bool, s: &LeafState) -> f32 {
+/// tell a lucky guess from real skill) is pulled toward the FC-pooled prior;
+/// with `n >> N_TARGET` it converges to the raw value.
+pub fn mastery_adjusted(leaf: &Leaf, s: &LeafState, states: &HashMap<String, LeafState>) -> f32 {
     let n = evidence(s);
     let w = n / (n + N_TARGET);
-    clamp01(w * mastery(is_cars, s) + (1.0 - w) * PRIOR_MASTERY)
+    clamp01(w * mastery(leaf.is_cars, s) + (1.0 - w) * pooled_prior(leaf, states))
 }
 
 /// Blueprint-weighted readiness across all leaves -> 472..528. Uses the
-/// evidence-shrunk mastery so unassessed/thin leaves read as the prior, not as
-/// whatever one data point said.
+/// evidence-shrunk mastery so unassessed/thin leaves read as their pooled
+/// prior, not as whatever one data point said.
 pub fn readiness(states: &HashMap<String, LeafState>) -> Readiness {
     let mut num = 0.0f32;
     let mut den = 0.0f32;
     for leaf in leaves() {
         let m = states
             .get(leaf.id)
-            .map(|s| mastery_adjusted(leaf.is_cars, s))
-            .unwrap_or(PRIOR_MASTERY);
+            .map(|s| mastery_adjusted(&leaf, s, states))
+            .unwrap_or_else(|| pooled_prior(&leaf, states));
         num += leaf.weight * m;
         den += leaf.weight;
     }
@@ -253,17 +273,53 @@ mod tests {
     #[test]
     fn thin_evidence_shrinks_toward_prior() {
         // one lucky fast attempt must not read as mastered
+        let l = super::super::taxonomy::leaf("1A").unwrap();
+        let none = HashMap::new();
         let mut s = LeafState::empty("1A");
         s.fluency = 1.0;
         s.application = 1.0;
         s.attempts = 1.0;
         s.freshness = 1.0;
-        let thin = mastery_adjusted(false, &s);
+        let thin = mastery_adjusted(&l, &s, &none);
         assert!(thin < 0.3, "thin evidence read {thin}");
         s.attempts = 50.0;
-        let deep = mastery_adjusted(false, &s);
+        let deep = mastery_adjusted(&l, &s, &none);
         assert!(deep > 0.85, "deep evidence read {deep}");
         assert!(deep > thin);
+    }
+
+    #[test]
+    fn strong_fc_siblings_lift_a_thin_leaf() {
+        // deep evidence on 1B/1C/1D at high mastery
+        let mut states: HashMap<String, LeafState> = HashMap::new();
+        for id in ["1B", "1C", "1D"] {
+            let mut s = LeafState::empty(id);
+            s.fluency = 0.9;
+            s.application = 0.9;
+            s.attempts = 30.0;
+            s.freshness = 1.0;
+            states.insert(id.to_string(), s);
+        }
+        let mut thin = LeafState::empty("1A");
+        thin.fluency = 0.9;
+        thin.application = 0.9;
+        thin.attempts = 1.0;
+        thin.freshness = 1.0;
+
+        let l1a = super::super::taxonomy::leaf("1A").unwrap();
+        let pooled = mastery_adjusted(&l1a, &thin, &states);
+        let alone = mastery_adjusted(&l1a, &thin, &HashMap::new());
+        assert!(pooled > alone + 0.2, "pooled {pooled} vs alone {alone}");
+
+        // a different FC's thin leaf is unaffected by FC-1 evidence
+        let l4a = super::super::taxonomy::leaf("4A").unwrap();
+        let mut thin4 = thin.clone();
+        thin4.id = "4A".into();
+        let other = mastery_adjusted(&l4a, &thin4, &states);
+        assert!(
+            (other - alone).abs() < 1e-6,
+            "other {other} vs alone {alone}"
+        );
     }
 
     #[test]

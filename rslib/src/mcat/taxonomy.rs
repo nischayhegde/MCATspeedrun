@@ -21,6 +21,10 @@ pub struct Leaf {
     pub section: Section,
     pub is_cars: bool,
     pub weight: f32,
+    /// Foundational-concept group ("1".."10"; "CARS" for the CARS skills) —
+    /// leaves in one group share a shrinkage prior (ability correlates most
+    /// strongly within a concept).
+    pub fc: &'static str,
 }
 
 /// Each science section contributes 1/4 of the composite; within a section the
@@ -31,6 +35,8 @@ struct FcDef {
     section: Section,
     /// fraction of its section
     weight: f32,
+    /// foundational-concept number ("1".."10")
+    fc: &'static str,
     ccs: &'static [(&'static str, &'static str)],
 }
 
@@ -38,6 +44,7 @@ const FCS: &[FcDef] = &[
     FcDef {
         section: Section::Cpbs,
         weight: 0.4,
+        fc: "4",
         ccs: &[
             ("4A", "Motion, forces, work, energy, equilibrium"),
             ("4B", "Fluids & gas exchange"),
@@ -49,6 +56,7 @@ const FCS: &[FcDef] = &[
     FcDef {
         section: Section::Cpbs,
         weight: 0.6,
+        fc: "5",
         ccs: &[
             ("5A", "Water & solutions (acid-base)"),
             ("5B", "Molecules & intermolecular forces"),
@@ -60,6 +68,7 @@ const FCS: &[FcDef] = &[
     FcDef {
         section: Section::Bbls,
         weight: 0.55,
+        fc: "1",
         ccs: &[
             ("1A", "Proteins & amino acids"),
             ("1B", "Gene -> protein"),
@@ -70,6 +79,7 @@ const FCS: &[FcDef] = &[
     FcDef {
         section: Section::Bbls,
         weight: 0.2,
+        fc: "2",
         ccs: &[
             ("2A", "Assemblies of molecules/cells"),
             ("2B", "Prokaryotes & viruses"),
@@ -79,6 +89,7 @@ const FCS: &[FcDef] = &[
     FcDef {
         section: Section::Bbls,
         weight: 0.25,
+        fc: "3",
         ccs: &[
             ("3A", "Nervous & endocrine systems"),
             ("3B", "Other organ systems"),
@@ -87,6 +98,7 @@ const FCS: &[FcDef] = &[
     FcDef {
         section: Section::Psbb,
         weight: 0.25,
+        fc: "6",
         ccs: &[
             ("6A", "Sensing the environment"),
             ("6B", "Making sense of the environment"),
@@ -96,6 +108,7 @@ const FCS: &[FcDef] = &[
     FcDef {
         section: Section::Psbb,
         weight: 0.35,
+        fc: "7",
         ccs: &[
             ("7A", "Individual influences on behavior"),
             ("7B", "Social processes"),
@@ -105,6 +118,7 @@ const FCS: &[FcDef] = &[
     FcDef {
         section: Section::Psbb,
         weight: 0.2,
+        fc: "8",
         ccs: &[
             ("8A", "Self-identity"),
             ("8B", "Social thinking"),
@@ -114,6 +128,7 @@ const FCS: &[FcDef] = &[
     FcDef {
         section: Section::Psbb,
         weight: 0.15,
+        fc: "9",
         ccs: &[
             ("9A", "Social structure"),
             ("9B", "Demographics & processes"),
@@ -122,6 +137,7 @@ const FCS: &[FcDef] = &[
     FcDef {
         section: Section::Psbb,
         weight: 0.05,
+        fc: "10",
         ccs: &[("10A", "Social inequality")],
     },
 ];
@@ -144,6 +160,7 @@ pub fn leaves() -> Vec<Leaf> {
                 section: fc.section,
                 is_cars: false,
                 weight: (SECTION_SHARE * fc.weight) / n,
+                fc: fc.fc,
             });
         }
     }
@@ -154,6 +171,7 @@ pub fn leaves() -> Vec<Leaf> {
             section: Section::Cars,
             is_cars: true,
             weight: SECTION_SHARE * w,
+            fc: "CARS",
         });
     }
     out

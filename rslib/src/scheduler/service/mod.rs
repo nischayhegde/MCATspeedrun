@@ -480,7 +480,7 @@ fn build_mcat_readiness(col: &mut Collection) -> Result<scheduler::McatReadiness
                 application: s.application,
                 // evidence-shrunk mastery: this is what the readiness roll-up
                 // actually uses, so the per-leaf display matches it
-                mastery: scoring::mastery_adjusted(leaf.is_cars, &s),
+                mastery: scoring::mastery_adjusted(&leaf, &s, &states),
                 attempts: s.attempts.round() as u32,
                 freshness: s.freshness,
                 assessed: s.assessed,
