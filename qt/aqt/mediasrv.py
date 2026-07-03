@@ -768,6 +768,7 @@ exposed_backend_list = [
     "recompute_mcat_leaf_states",
     "get_mcat_study_queue",
     "answer_mcat_card",
+    "answer_mcat_card_typed",
     "get_mcat_diagnostic",
     "reset_mcat_progress",
     # DeckConfigService

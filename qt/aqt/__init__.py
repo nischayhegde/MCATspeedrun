@@ -566,6 +566,30 @@ def write_profile_results() -> None:
     profiler.dump_stats(profile)
 
 
+def _load_openai_env() -> None:
+    """Expose questionbankparsing/.env (OPENAI_API_KEY etc.) to rslib.
+
+    aqt and rslib share one process, so os.environ is visible to Rust's
+    std::env. Dev-tree only: silently a no-op when the file is absent
+    (packaged builds). Pre-set environment variables always win.
+    """
+    try:
+        env_path = Path(__file__).resolve().parents[2] / "questionbankparsing" / ".env"
+        if not env_path.exists():
+            return
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+    except OSError:
+        return
+
+
 def run() -> None:
     print(f"Starting Anki {_version}...")
     try:
@@ -589,6 +613,8 @@ def _run(argv: list[str] | None = None, exec: bool = True) -> AnkiApp | None:
 
     If no 'argv' is supplied then 'sys.argv' will be used.
     """
+    _load_openai_env()
+
     global mw
     global profiler
 
