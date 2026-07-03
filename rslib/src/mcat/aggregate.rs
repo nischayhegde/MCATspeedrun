@@ -108,12 +108,20 @@ pub fn score_leaf(leaf: &Leaf, reviews: &[Review], rote: &[RoteMemory], now_ms: 
             0.0
         }
     });
-    // effective spaced-correct: sum of spacing weights over correct recalls
+    // effective spaced-correct: sum of spacing weights over correct recalls.
+    // Verdict-backed (objective) recalls count fully; legacy self-graded ones
+    // are discounted — an "Easy" click is weak evidence (PRD: Hendrick).
     let spaced_correct: f32 = rote_reviews
         .iter()
         .zip(&rote_spacing)
         .filter(|(r, _)| r.correct)
-        .map(|(_, &w)| w)
+        .map(|(r, &w)| {
+            w * if r.objective {
+                1.0
+            } else {
+                SELF_GRADED_EVIDENCE_WEIGHT
+            }
+        })
         .sum();
 
     // application = recency+spacing-weighted correctness (with a speed bonus)
@@ -202,6 +210,7 @@ mod tests {
             massed,
             productive_failure: false,
             latency: latency_for(ItemKind::Flashcard),
+            objective: true,
         }
     }
 
@@ -223,6 +232,7 @@ mod tests {
             massed: false,
             productive_failure: false,
             latency: latency_for(kind),
+            objective: true,
         }
     }
 
@@ -357,6 +367,31 @@ mod tests {
         ];
         let s = score_leaf(&l, &spread, &[], NOW);
         assert!((s.attempts - 3.0).abs() < 1e-3, "attempts {}", s.attempts);
+    }
+
+    #[test]
+    fn self_graded_evidence_is_discounted_for_the_gate() {
+        // the same spaced fast-correct history that opens the gate when
+        // verdict-backed (see massed_cramming test) is only half evidence
+        // when it came from self-pressed grade buttons
+        let l = leaf("1A").unwrap();
+        let rote_mem = vec![RoteMemory {
+            retrievability_now: 0.95,
+            reps: 5,
+        }];
+        let mut self_rated = vec![
+            rote_review(20, true, 3_000, false),
+            rote_review(10, true, 3_000, false),
+            rote_review(5, true, 3_000, false),
+        ];
+        for r in &mut self_rated {
+            r.objective = false;
+        }
+        let s = score_leaf(&l, &self_rated, &rote_mem, NOW);
+        assert!(
+            !s.gate_open,
+            "self-graded clicks alone opened the fluency gate"
+        );
     }
 
     #[test]

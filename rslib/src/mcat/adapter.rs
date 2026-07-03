@@ -15,6 +15,7 @@
 //!     always application items.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use fsrs::FSRS;
 use fsrs::FSRS5_DEFAULT_DECAY;
@@ -68,6 +69,7 @@ fn build_card_reviews(
     is_app: bool,
     cars: bool,
     latency: Latency,
+    objective_ids: &HashSet<i64>,
 ) -> Vec<Review> {
     let mut sorted: Vec<&RevlogEntry> = entries.iter().collect();
     sorted.sort_by_key(|e| e.id.0);
@@ -93,6 +95,15 @@ fn build_card_reviews(
         };
         let massed = reps > 0 && elapsed_days < 1.0;
         let productive_failure = reps == 0 && !correct;
+        // MCQ answers are always auto-graded; a flashcard row is objective
+        // when a verdict-backed answer-log entry points at it. Typed answers
+        // are judged against the wider typed-mode thresholds.
+        let objective = is_app || objective_ids.contains(&ts);
+        let latency = if !is_app && objective_ids.contains(&ts) {
+            super::grader::typed_latency()
+        } else {
+            latency
+        };
         out.push(Review {
             ts_ms: ts,
             grade: Grade::from_button(e.button_chosen),
@@ -105,6 +116,7 @@ fn build_card_reviews(
             massed,
             productive_failure,
             latency,
+            objective,
         });
         prev_ts = Some(ts);
         reps += 1;
@@ -151,7 +163,9 @@ impl Collection {
             let latency = note_expected_latency(&note.tags, kind);
 
             let entries = self.storage.get_revlog_entries_for_card(cid)?;
-            let card_reviews = build_card_reviews(&entries, kind, is_app, cars, latency);
+            let objective_ids = self.storage.mcat_answer_log_ids_for_card(cid.0)?;
+            let card_reviews =
+                build_card_reviews(&entries, kind, is_app, cars, latency, &objective_ids);
             let reps = card_reviews.len() as u32;
             reviews.extend(card_reviews);
 
@@ -239,6 +253,7 @@ impl Collection {
         let ids: Vec<i64> = cids.iter().map(|c| c.0).collect();
         self.transact_no_undo(|col| {
             col.storage.clear_revlog_for_cards(&ids)?;
+            col.storage.clear_mcat_answer_log()?;
             col.storage.clear_mcat_leaf_states()
         })?;
 

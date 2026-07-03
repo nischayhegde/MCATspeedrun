@@ -109,6 +109,9 @@ pub struct Review {
     /// Per-item expected-time thresholds (rc/ct-scaled; see
     /// [`expected_latency`]).
     pub latency: Latency,
+    /// Correctness is verdict-backed (LLM-graded typed answer, or an
+    /// auto-graded MCQ) rather than a self-pressed grade button.
+    pub objective: bool,
 }
 
 impl Review {
@@ -222,6 +225,9 @@ pub const SPACING_FULL_DAYS: f32 = 3.0; // rote gap for full evidence weight
 pub const APP_SPACING_FULL_DAYS: f32 = 1.0; // leaf-level application gap ditto
 pub const APP_SPACING_FLOOR: f32 = 0.3; // same-day fresh problems still count some
 pub const SPACED_CORRECT_TARGET: f32 = 2.0; // effective spaced-correct to open gate
+
+// objective grading (LLM-verdict-backed reviews vs legacy self-graded ones)
+pub const SELF_GRADED_EVIDENCE_WEIGHT: f32 = 0.5; // discount for self-graded correct recalls
 
 // application-implies-fluency (PRD bidirectional inference)
 pub const APP_FLUENCY_FLOOR: f32 = 0.8; // any correct application implies at least this fluency

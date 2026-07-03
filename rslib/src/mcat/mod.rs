@@ -94,6 +94,7 @@ mod tests {
                 massed: false,
                 productive_failure: false,
                 latency: latency_for(ItemKind::Application),
+                objective: true,
             }],
         );
         let rote: HashMap<String, Vec<RoteMemory>> = HashMap::new();
