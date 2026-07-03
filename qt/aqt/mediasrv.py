@@ -37,6 +37,7 @@ from aqt.deckoptions import DeckOptionsDialog
 from aqt.operations import on_op_finished
 from aqt.operations.deck import update_deck_configs as update_deck_configs_op
 from aqt.progress import ProgressUpdate
+from aqt import lan_server
 from aqt.qt import *
 from aqt.utils import aqt_data_path, show_warning, tr
 
@@ -380,7 +381,13 @@ def _handle_builtin_file_request(request: BundledFileRequest) -> Response:
 
 @app.route("/<path:pathin>", methods=["GET", "POST"])
 def handle_request(pathin: str) -> Response:
-    if os.environ.get("ANKI_API_HOST") != "0.0.0.0":
+    lan_client = lan_server.has_lan_access(request.headers.get("Authorization"))
+    if lan_client:
+        # phone client on the LAN: restricted to the MCAT API + media files
+        if not lan_server.lan_request_allowed(request.method, pathin):
+            logger.warning("denied LAN request: %s /%s", request.method, pathin)
+            abort(403)
+    elif os.environ.get("ANKI_API_HOST") != "0.0.0.0":
         host = request.headers.get("Host", "").lower()
         origin = request.headers.get("Origin", "").lower()
         allowed_hosts = tuple(f"{h}:" for h in _LOCALHOST_HOSTS)
@@ -392,6 +399,23 @@ def handle_request(pathin: str) -> Response:
             abort(403)
 
     req = _extract_request(pathin)
+
+    # Authoritative LAN media rule: mediasrv aliases sveltekit pages
+    # (mcat/, graphs/, _app/, ...) to internal bundle paths during
+    # extraction, so a raw-path filter cannot classify them. Serve LAN GETs
+    # only when the request resolved to a collection-media file; NotFound
+    # passes through so "collection not open"/missing files still 404.
+    if (
+        lan_client
+        and request.method == "GET"
+        and not isinstance(req, NotFound)
+        and not (
+            isinstance(req, LocalFileRequest)
+            and req.root == aqt.mw.col.media.dir()
+        )
+    ):
+        logger.warning("denied LAN GET of non-media path: /%s", pathin)
+        abort(403)
     logger.debug("%s /%s", flask.request.method, pathin)
 
     try:
@@ -705,6 +729,38 @@ def save_custom_colours() -> bytes:
     return b""
 
 
+def _lan_status_bytes(error: str = "") -> bytes:
+    from anki import frontend_pb2
+
+    return frontend_pb2.LanServerStatus(
+        running=lan_server.is_running(),
+        host_ip=lan_server.get_lan_ip(),
+        port=lan_server.DEFAULT_LAN_PORT,
+        token=aqt.mw.pm.profile.get(lan_server.TOKEN_PROFILE_KEY, ""),
+        error=error,
+    ).SerializeToString()
+
+
+def start_lan_server() -> bytes:
+    token = aqt.mw.pm.profile.get(lan_server.TOKEN_PROFILE_KEY)
+    if not token:
+        token = secrets.token_urlsafe(32)
+        aqt.mw.pm.profile[lan_server.TOKEN_PROFILE_KEY] = token
+        # profile db writes must happen on the main thread
+        aqt.mw.taskman.run_on_main(aqt.mw.pm.save)
+    error = lan_server.start(app, token) or ""
+    return _lan_status_bytes(error)
+
+
+def stop_lan_server() -> bytes:
+    lan_server.stop()
+    return _lan_status_bytes()
+
+
+def get_lan_server_status() -> bytes:
+    return _lan_status_bytes()
+
+
 post_handler_list = [
     congrats_info,
     get_deck_configs_for_update,
@@ -721,6 +777,9 @@ post_handler_list = [
     deck_options_require_close,
     deck_options_ready,
     save_custom_colours,
+    start_lan_server,
+    stop_lan_server,
+    get_lan_server_status,
 ]
 
 
@@ -833,6 +892,12 @@ def _check_dynamic_request_permissions():
 
     # does page have access to entire API?
     if _have_api_access():
+        return
+
+    # phone clients authenticated with the LAN token may call the MCAT API
+    if lan_server.has_lan_access(
+        request.headers.get("Authorization")
+    ) and lan_server.lan_request_allowed(request.method, request.path.lstrip("/")):
         return
 
     # whitelisted API endpoints for reviewer/previewer

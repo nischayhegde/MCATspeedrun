@@ -131,3 +131,125 @@ class TestLanServerLifecycle:
             assert error is not None and error != ""
         finally:
             blocker.close()
+
+
+import aqt
+from aqt import lan_server
+
+
+class _StubTaskman:
+    def run_on_main(self, closure):
+        closure()
+
+
+class _StubPm:
+    def __init__(self) -> None:
+        self.profile: dict = {}
+
+    def save(self) -> None:
+        pass
+
+
+class _StubMw:
+    def __init__(self) -> None:
+        self.taskman = _StubTaskman()
+        self.pm = _StubPm()
+        self.col = None
+
+
+@pytest.fixture
+def lan_active(monkeypatch):
+    "Simulate a running LAN server with a known token, plus a stub mw."
+    monkeypatch.setattr(lan_server, "_current", object())
+    monkeypatch.setattr(lan_server, "_current_token", "testtoken")
+    monkeypatch.setattr(aqt, "mw", _StubMw())
+    yield "Bearer testtoken"
+
+
+class TestLanGate:
+    def _client(self):
+        from aqt.mediasrv import app
+
+        return app.test_client()
+
+    def test_lan_token_denied_for_non_mcat_method(self, lan_active) -> None:
+        resp = self._client().post(
+            "/_anki/getDeckNames",
+            headers={
+                "Authorization": lan_active,
+                "Content-Type": "application/binary",
+            },
+        )
+        assert resp.status_code == 403
+
+    def test_lan_token_passes_gate_for_mcat_method(self, lan_active) -> None:
+        # col is None in tests, so a request that passes the auth gate hits
+        # "collection not open" (404) rather than 403.
+        resp = self._client().post(
+            "/_anki/computeMcatReadiness",
+            headers={
+                "Authorization": lan_active,
+                "Content-Type": "application/binary",
+            },
+        )
+        assert resp.status_code == 404
+
+    def test_no_token_from_lan_host_denied(self, lan_active) -> None:
+        resp = self._client().post(
+            "/_anki/computeMcatReadiness",
+            headers={
+                "Host": "192.168.1.50:8045",
+                "Content-Type": "application/binary",
+            },
+        )
+        assert resp.status_code == 403
+
+    def test_wrong_token_from_lan_host_denied(self, lan_active) -> None:
+        resp = self._client().post(
+            "/_anki/computeMcatReadiness",
+            headers={
+                "Host": "192.168.1.50:8045",
+                "Authorization": "Bearer wrong",
+                "Content-Type": "application/binary",
+            },
+        )
+        assert resp.status_code == 403
+
+    def test_media_get_with_token_passes_gate(self, lan_active) -> None:
+        # Passes the gate; col is None so it 404s at "collection not open".
+        resp = self._client().get(
+            "/some-image.jpg",
+            headers={"Host": "192.168.1.50:8045", "Authorization": lan_active},
+        )
+        assert resp.status_code == 404
+
+    def test_media_get_without_token_denied(self, lan_active) -> None:
+        resp = self._client().get(
+            "/some-image.jpg", headers={"Host": "192.168.1.50:8045"}
+        )
+        assert resp.status_code == 403
+
+    def test_sveltekit_alias_get_denied(self, lan_active) -> None:
+        # "mcat/..." is aliased to internal bundle content during request
+        # extraction; a LAN token must not fetch it even though the raw
+        # path looks media-like.
+        resp = self._client().get(
+            "/mcat/_app/immutable/chunks/foo.js",
+            headers={"Host": "192.168.1.50:8045", "Authorization": lan_active},
+        )
+        assert resp.status_code == 403
+
+    def test_graphs_page_get_denied(self, lan_active) -> None:
+        resp = self._client().get(
+            "/graphs/index.html",
+            headers={"Host": "192.168.1.50:8045", "Authorization": lan_active},
+        )
+        assert resp.status_code == 403
+
+    def test_localhost_requests_unaffected(self, lan_active) -> None:
+        # No LAN token: existing localhost rules still apply (page 404s
+        # normally rather than 403).
+        resp = self._client().get(
+            "/_anki/pages/nonexistent", headers={"Host": "127.0.0.1:40000"}
+        )
+        assert resp.status_code == 404
