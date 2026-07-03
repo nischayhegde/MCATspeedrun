@@ -47,7 +47,7 @@ Changes in this wave:
 - **Fluency reformulated**: `fluency = 0.5 * durability + 0.5 * consistency`.
   - `durability` unchanged (mean FSRS retrievability of the leaf's rote cards).
   - `consistency` replaces latency-based automaticity: the recency+spacing
-    weighted mean of *recall credit* over rote reviews:
+    weighted mean of _recall credit_ over rote reviews:
     `Good/Easy → 1.0`, `Hard → PARTIAL_CREDIT (0.5)`, `Again → 0.0`.
     Productive failures (first-exposure misses) are excluded — they are
     instruction events, not lapses (PRD).

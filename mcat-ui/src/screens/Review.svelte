@@ -137,15 +137,15 @@
                         <div class="legend">
                             <div>
                                 <span class="k good">Fast + correct</span>
-                                 you land a punch
+                                you land a punch
                             </div>
                             <div>
                                 <span class="k warn">Slow + correct</span>
-                                 you block
+                                you block
                             </div>
                             <div>
                                 <span class="k bad">Wrong</span>
-                                 you take a hit
+                                you take a hit
                             </div>
                         </div>
                     {/if}

@@ -233,7 +233,10 @@ impl Default for StudyConfig {
 // ---- shared calibration constants (see PRD + 2026-07-01 scoring spec) ------
 pub const N_TARGET: f32 = 5.0; // spaced recalls for full evidence depth
 pub const R_TARGET: f32 = 0.9; // desired retrievability
-pub const FLUENCY_THRESHOLD: f32 = 0.75; // fluency gate opens at/above this
+// Application only unlocks once fluency reads as fully mastered (matches the
+// UI's rounded-to-100% display, so "gate open" and "100% fluency" never
+// visibly disagree).
+pub const FLUENCY_GATE_THRESHOLD: f32 = 0.995;
 pub const RECENCY_TAU_DAYS: f32 = 21.0;
 pub const DAY_MS: i64 = 86_400_000;
 
@@ -246,7 +249,6 @@ pub const LATENCY_SCALE_MAX: f32 = 2.0;
 pub const SPACING_FULL_DAYS: f32 = 3.0; // rote gap for full evidence weight
 pub const APP_SPACING_FULL_DAYS: f32 = 1.0; // leaf-level application gap ditto
 pub const APP_SPACING_FLOOR: f32 = 0.3; // same-day fresh problems still count some
-pub const SPACED_CORRECT_TARGET: f32 = 2.0; // effective spaced-correct to open gate
 
 // objective grading (LLM-verdict-backed reviews vs legacy self-graded ones)
 pub const SELF_GRADED_EVIDENCE_WEIGHT: f32 = 0.5; // discount for self-graded correct recalls

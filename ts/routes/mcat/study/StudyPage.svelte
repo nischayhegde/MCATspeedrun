@@ -66,28 +66,58 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     let startedAt = Date.now();
     let now = Date.now();
     let timerHidden = false;
-    const tick = setInterval(() => (now = Date.now()), 1000);
+    let paused = false;
+    let pausedAt = 0;
+    const tick = setInterval(() => {
+        if (!paused) {
+            now = Date.now();
+        }
+    }, 1000);
     onDestroy(() => clearInterval(tick));
     onMount(() => (timerHidden = localStorage.getItem("sf-timer-hidden") === "1"));
+
+    // Pausing freezes the on-screen timer; resuming shifts `startedAt` forward
+    // by exactly the paused span so elapsed time, the fast-answer threshold,
+    // and the millisecondsTaken sent to the backend all exclude the pause.
+    function togglePause(): void {
+        if (paused) {
+            const pausedSpan = Date.now() - pausedAt;
+            startedAt += pausedSpan;
+            now = Date.now();
+            paused = false;
+        } else {
+            pausedAt = Date.now();
+            paused = true;
+        }
+    }
 
     $: item = items[index] as McatStudyItem | undefined;
     $: isMcq = item?.kind === McatStudyItem_Kind.MCQ;
     $: done = index >= items.length;
     $: correct = chosen !== null && item !== undefined && chosen === item.answer;
-    $: verdictLabel = gaveUp
-        ? "Didn't know — marked Again"
-        : verdict === AnswerMcatCardTypedResponse_Verdict.CORRECT
-          ? "Correct"
-          : verdict === AnswerMcatCardTypedResponse_Verdict.PARTIAL
-            ? "Partially correct"
-            : "Incorrect";
+    function verdictText(
+        v: AnswerMcatCardTypedResponse_Verdict,
+        didntKnow: boolean,
+    ): string {
+        if (didntKnow) {
+            return "Didn't know — marked Again";
+        }
+        if (v === AnswerMcatCardTypedResponse_Verdict.CORRECT) {
+            return "Correct";
+        }
+        if (v === AnswerMcatCardTypedResponse_Verdict.PARTIAL) {
+            return "Partially correct";
+        }
+        return "Incorrect";
+    }
+    $: verdictLabel = verdictText(verdict, gaveUp);
     $: opponent = item && isMcq ? opponentFor(item, tierCache) : null;
     // Hero grows with readiness; capped so it never crowds the strip.
-    $: heroScale = 0.9 + Math.max(0, Math.min(100, readinessPct)) / 100 * 0.3;
+    $: heroScale = 0.9 + (Math.max(0, Math.min(100, readinessPct)) / 100) * 0.3;
     $: marquee = item
         ? `${item.leafId} · ${item.leafName}${
-            opponent ? `  vs ${opponent.species.name} · TIER ${opponent.tier}` : ""
-        }`
+              opponent ? `  vs ${opponent.species.name} · TIER ${opponent.tier}` : ""
+          }`
         : "";
     $: elapsed = Math.max(0, now - startedAt);
     $: timerText = timerHidden
@@ -111,7 +141,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     async function chooseLetter(letter: string): Promise<void> {
-        if (!item || chosen !== null || answering) {
+        if (!item || chosen !== null || answering || paused) {
             return;
         }
         answering = true;
@@ -135,7 +165,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     async function chooseIdk(): Promise<void> {
-        if (!item || chosen !== null || answering) {
+        if (!item || chosen !== null || answering || paused) {
             return;
         }
         answering = true;
@@ -154,7 +184,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     // verdict arrives — on failure the card stays unanswered and the same
     // submission can be retried (block-until-graded, no self-grade fallback).
     async function submitTyped(giveUp: boolean): Promise<void> {
-        if (!item || flashPhase === "grading" || flashPhase === "graded") {
+        if (!item || flashPhase === "grading" || flashPhase === "graded" || paused) {
             return;
         }
         if (flashPhase === "prompt") {
@@ -175,7 +205,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             feedback = resp.feedback;
             flashPhase = "graded";
             fire(
-                (["rate-again", "rate-hard", "rate-good", "rate-easy"] as const)[resp.grade - 1],
+                (["rate-again", "rate-hard", "rate-good", "rate-easy"] as const)[
+                    resp.grade - 1
+                ],
             );
         } catch (err) {
             flashPhase = "error";
@@ -184,6 +216,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     function onAnswerKeydown(e: KeyboardEvent): void {
+        if (paused) {
+            return;
+        }
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             submitTyped(false);
@@ -211,7 +246,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     function onKeydown(event: KeyboardEvent): void {
-        if (!item) {
+        if (!item || paused) {
             return;
         }
         const key = event.key.toLowerCase();
@@ -220,7 +255,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 chooseLetter(key.toUpperCase());
             } else if (chosen === null && key === "0") {
                 chooseIdk();
-            } else if (chosen !== null && !answering && (key === " " || key === "enter")) {
+            } else if (
+                chosen !== null &&
+                !answering &&
+                (key === " " || key === "enter")
+            ) {
                 next();
             }
         } else if (flashPhase === "graded" && (key === " " || key === "enter")) {
@@ -247,9 +286,21 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             counter={`${index + 1} / ${items.length}`}
             paceState={isMcq && chosen === null ? paceState : null}
             timerText={isMcq ? timerText : ""}
+            showPause
+            {paused}
             on:exit={() => goto("/mcat")}
             on:timerclick={toggleTimer}
+            on:pauseclick={togglePause}
         />
+        {#if paused}
+            <div class="pause-overlay">
+                <div class="pause-card">
+                    <h1>Paused</h1>
+                    <p>Your timer is frozen. Take your time.</p>
+                    <button class="primary" on:click={togglePause}>Resume</button>
+                </div>
+            </div>
+        {/if}
         <FightRing
             mode={isMcq ? "spar" : "train"}
             {event}
@@ -271,12 +322,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 graded
                 {chosen}
                 answer={item.answer}
-                disabled={chosen !== null}
+                disabled={chosen !== null || paused}
                 collapsed={chosen !== null}
                 on:choose={(e) => chooseLetter(e.detail.letter)}
             />
             {#if chosen === null}
-                <IdkButton disabled={answering} on:choose={chooseIdk} />
+                <IdkButton disabled={answering || paused} on:choose={chooseIdk} />
             {:else}
                 <div class="feedback" class:correct class:idk={chosen === IDK}>
                     <strong>
@@ -306,13 +357,18 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                         rows="3"
                         placeholder="Describe this term from memory…"
                         autofocus
+                        disabled={paused}
                         on:keydown={onAnswerKeydown}
                     ></textarea>
                     <div class="typed-actions">
-                        <button class="primary" on:click={() => submitTyped(false)}>
+                        <button
+                            class="primary"
+                            disabled={paused}
+                            on:click={() => submitTyped(false)}
+                        >
                             Submit <KeyHint key="↵" />
                         </button>
-                        <IdkButton on:choose={() => submitTyped(true)} />
+                        <IdkButton disabled={paused} on:choose={() => submitTyped(true)} />
                     </div>
                 </div>
                 {#if flashPhase === "error"}
@@ -330,7 +386,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     <p class="back">{item.back}</p>
                 </div>
                 {#if !gaveUp && typedAnswer.trim()}
-                    <p class="typed-echo"><span>Your answer:</span> {typedAnswer}</p>
+                    <p class="typed-echo">
+                        <span>Your answer:</span>
+                        {typedAnswer}
+                    </p>
                 {/if}
                 {#if flashPhase === "grading"}
                     <div class="grading">Grading your answer…</div>
@@ -381,10 +440,53 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         box-sizing: border-box;
     }
 
-    /* Feedback shares the leftover space; the explanation scrolls inside its
-       own box (only if truly long). QuestionCard is the only flex:1 element,
-       so the stem is what yields first as things get tight — but the page
-       itself can still scroll as a fallback so Continue is never clipped. */
+    .pause-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: color-mix(in srgb, var(--sf-canvas) 92%, transparent);
+        backdrop-filter: blur(6px);
+    }
+
+    .pause-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.9rem;
+        text-align: center;
+        padding: 2.5rem 3rem;
+        border-radius: var(--sf-r-lg);
+        border: 1px solid var(--sf-border);
+        background: var(--sf-surface);
+        box-shadow: var(--sf-shadow-2);
+    }
+
+    .pause-card h1 {
+        margin: 0;
+        font-size: 2.4rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .pause-card p {
+        margin: 0;
+        opacity: 0.75;
+    }
+
+    .pause-card .primary {
+        @include sf.button-primary;
+    }
+
+    /* Feedback shares leftover space and the explanation scrolls inside its
+       own box, yielding first (down to a ~2-line floor) as space gets tight —
+       so the verdict and Continue stay on screen. overflow must stay VISIBLE:
+       hidden would zero the flex automatic minimum size, letting the box be
+       crushed and Continue clipped with no scrollbar to reach it. With the
+       min-content floor intact, the page overflows instead and its own
+       scrollbar takes over — Continue is always reachable. */
     .feedback {
         flex: 0 1 auto;
         max-height: 40%;
@@ -393,7 +495,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         display: flex;
         flex-direction: column;
         gap: 0.5rem;
-        overflow: hidden;
+    }
+
+    .feedback strong,
+    .feedback .primary {
+        flex-shrink: 0;
     }
 
     .feedback.correct {
@@ -404,20 +510,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         border-left-color: var(--sf-steel);
     }
 
-    .feedback strong {
-        flex-shrink: 0;
-    }
-
     .feedback p {
         flex: 1 1 auto;
-        min-height: 0;
+        min-height: 3em;
         margin: 0;
         overflow: auto;
         line-height: 1.5;
-    }
-
-    .feedback .primary {
-        flex-shrink: 0;
     }
 
     .answer {

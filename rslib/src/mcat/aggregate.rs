@@ -81,7 +81,10 @@ pub fn score_leaf(leaf: &Leaf, reviews: &[Review], rote: &[RoteMemory], now_ms: 
     // consistency = recency+spacing-weighted recall credit of rote reviews.
     // Flashcards are untimed: the verdict (or grade button) is the signal,
     // latency is not. Partial verdicts earn half credit, and first-exposure
-    // misses are instruction (productive failure), not evidence.
+    // misses are instruction (productive failure), not evidence. Verdict-backed
+    // recalls count fully; legacy self-graded ones are discounted — an "Easy"
+    // click is weak evidence (PRD: Hendrick) — so self-graded history alone
+    // can't carry fluency (and therefore the gate) to full mastery.
     let mut cw = 0.0f32;
     let mut cv = 0.0f32;
     for r in &rote_reviews {
@@ -89,30 +92,15 @@ pub fn score_leaf(leaf: &Leaf, reviews: &[Review], rote: &[RoteMemory], now_ms: 
             continue;
         }
         let w = evidence_weight(r, r.spacing_weight());
+        let discount = if r.objective {
+            1.0
+        } else {
+            SELF_GRADED_EVIDENCE_WEIGHT
+        };
         cw += w;
-        cv += w * r.grade.recall_credit();
+        cv += w * r.grade.recall_credit() * discount;
     }
     let consistency = if cw > 0.0 { cv / cw } else { 0.0 };
-
-    // effective spaced-correct toward the gate, counted only after `cut`:
-    // spacing x recall credit x objectivity discount. Verdict-backed recalls
-    // count fully; legacy self-graded ones are discounted — an "Easy" click
-    // is weak evidence (PRD: Hendrick).
-    let spaced_correct_since = |cut: i64| -> f32 {
-        rote_reviews
-            .iter()
-            .filter(|r| r.ts_ms > cut && r.correct)
-            .map(|r| {
-                r.spacing_weight()
-                    * r.grade.recall_credit()
-                    * if r.objective {
-                        1.0
-                    } else {
-                        SELF_GRADED_EVIDENCE_WEIGHT
-                    }
-            })
-            .sum()
-    };
 
     // application = chance-corrected accuracy x speed quality. Accuracy
     // evidence is difficulty-weighted: a correct on a hard item (or a miss on
@@ -168,22 +156,12 @@ pub fn score_leaf(leaf: &Leaf, reviews: &[Review], rote: &[RoteMemory], now_ms: 
         fluency = fluency.max(APP_FLUENCY_FLOOR.max(application));
     }
 
-    // recovery-aware gate: a genuine (post-learning) miss closes the gate
-    // immediately, and the student re-earns it with the same evidence bar as
-    // the first time — counted only from reviews after the most recent miss.
-    let lapse_ts = sorted
-        .iter()
-        .rev()
-        .find(|r| !r.correct && !r.productive_failure)
-        .map(|r| r.ts_ms)
-        .unwrap_or(i64::MIN);
-
-    let gate_open = if leaf.is_cars {
-        true
-    } else {
-        (fluency >= FLUENCY_THRESHOLD && spaced_correct_since(lapse_ts) >= SPACED_CORRECT_TARGET)
-            || app_demonstrated(lapse_ts)
-    };
+    // Application only unlocks once fluency is fully mastered — a partial
+    // fluency score (however high) leaves the gate closed. A genuine miss
+    // pulls consistency/accuracy back down below the threshold on its own
+    // (weighted by recency), so recovery is just re-earning that evidence —
+    // no separate lapse bookkeeping needed.
+    let gate_open = leaf.is_cars || fluency >= FLUENCY_GATE_THRESHOLD;
 
     let last_app_age = app_reviews
         .last()
@@ -333,25 +311,29 @@ mod tests {
     }
 
     #[test]
-    fn lapse_closes_gate_and_recovery_reearns_it() {
+    fn a_lingering_miss_keeps_the_gate_closed() {
+        // The gate now requires fluency at effectively full mastery, so a
+        // single genuine miss anywhere in recent history keeps corrected
+        // accuracy (and therefore fluency) below the bar — no separate
+        // lapse/recovery bookkeeping needed, and a few more correct answers
+        // don't paper over it within the same recency window.
         let l = leaf("1C").unwrap();
         let mut reviews = vec![
             app_review(20, true, 30_000, false),
             app_review(15, true, 30_000, false),
-            app_review(10, false, 130_000, false), // genuine lapse
+            app_review(10, false, 130_000, false), // genuine miss
         ];
         let s = score_leaf(&l, &reviews, &[], NOW);
-        assert!(!s.gate_open, "lapse did not close the gate");
+        assert!(!s.gate_open, "a miss left the gate open");
 
-        // one post-lapse correct is not enough to reopen
         reviews.push(app_review(8, true, 30_000, false));
-        let s = score_leaf(&l, &reviews, &[], NOW);
-        assert!(!s.gate_open, "single correct reopened the gate");
-
-        // a second spaced post-lapse correct re-earns it
         reviews.push(app_review(4, true, 30_000, false));
         let s = score_leaf(&l, &reviews, &[], NOW);
-        assert!(s.gate_open, "recovery evidence failed to reopen the gate");
+        assert!(
+            !s.gate_open,
+            "a few more corrects reopened the gate despite the lingering miss (fluency {})",
+            s.fluency
+        );
     }
 
     #[test]
@@ -388,7 +370,7 @@ mod tests {
         let s = score_leaf(&l, &reviews, &rote_mem, NOW);
         // consistency = 1.0 (the PF miss is excluded): 0.5*0.8 + 0.5*1.0
         assert!((s.fluency - 0.9).abs() < 1e-3, "fluency was {}", s.fluency);
-        // but one spaced correct is still below the gate's evidence bar
+        // 90% fluency is strong, but the gate needs effectively full mastery
         assert!(!s.gate_open);
         assert!(s.assessed);
     }
@@ -406,6 +388,47 @@ mod tests {
         let s = score_leaf(&l, &reviews, &[], NOW);
         assert!(s.application > 0.95, "application was {}", s.application);
         assert!(s.fluency > 0.95, "fluency was {}", s.fluency);
+        assert!(s.gate_open, "perfect application history left the gate closed");
+    }
+
+    #[test]
+    fn strong_but_partial_fluency_leaves_the_gate_closed() {
+        let l = leaf("1A").unwrap();
+        let rote_mem = vec![RoteMemory {
+            retrievability_now: 0.95,
+            reps: 5,
+        }];
+        let reviews = vec![
+            rote_review(20, true, false),
+            rote_review(10, true, false),
+            rote_review(5, true, false),
+        ];
+        let s = score_leaf(&l, &reviews, &rote_mem, NOW);
+        // durability 0.95, consistency 1.0 -> fluency 0.975: strong, but not
+        // full mastery, so application must stay locked.
+        assert!(
+            s.fluency > 0.9 && s.fluency < FLUENCY_GATE_THRESHOLD,
+            "fluency was {}",
+            s.fluency
+        );
+        assert!(!s.gate_open, "gate opened without full mastery");
+    }
+
+    #[test]
+    fn full_mastery_opens_the_gate() {
+        let l = leaf("1A").unwrap();
+        let rote_mem = vec![RoteMemory {
+            retrievability_now: 1.0,
+            reps: 5,
+        }];
+        let reviews = vec![
+            rote_review(20, true, false),
+            rote_review(10, true, false),
+            rote_review(5, true, false),
+        ];
+        let s = score_leaf(&l, &reviews, &rote_mem, NOW);
+        assert_eq!(s.fluency, 1.0, "fluency was {}", s.fluency);
+        assert!(s.gate_open, "full mastery failed to open the gate");
     }
 
     #[test]
@@ -419,7 +442,14 @@ mod tests {
     }
 
     #[test]
-    fn massed_cramming_does_not_open_gate_but_spaced_recalls_do() {
+    fn massed_cramming_reads_as_less_evidence_depth_than_spacing() {
+        // `attempts` (evidence depth) still discounts massed same-day repeats
+        // vs genuinely spaced ones. Whether cramming vs. spacing keeps the
+        // gate closed is no longer this layer's job — with a fixed mocked
+        // `retrievability_now` (as here), consistency is a plain average of
+        // equal-credit reviews and can't tell them apart; in real usage that
+        // distinction comes from FSRS's own stability model feeding
+        // `durability`, since massed repeats gain far less stability per rep.
         let l = leaf("1A").unwrap();
         let rote_mem = vec![RoteMemory {
             retrievability_now: 0.95,
@@ -432,7 +462,6 @@ mod tests {
             crammed.push(rote_review(0, true, true));
         }
         let s = score_leaf(&l, &crammed, &rote_mem, NOW);
-        assert!(!s.gate_open, "cramming opened the gate");
         assert!(
             s.attempts < 1.5,
             "5 massed repeats read as {} attempts",
@@ -446,7 +475,6 @@ mod tests {
             rote_review(5, true, false),
         ];
         let s = score_leaf(&l, &spaced, &rote_mem, NOW);
-        assert!(s.gate_open, "spaced correct recalls should open the gate");
         assert!(s.attempts > 2.5);
     }
 

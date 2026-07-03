@@ -1,0 +1,10 @@
+// Copyright: Ankitects Pty Ltd and contributors
+// License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+import { computeMcatReadiness } from "@generated/backend";
+
+import type { LayoutLoad } from "./$types";
+
+export const load = (async () => {
+    const readiness = await computeMcatReadiness({});
+    return { readiness };
+}) satisfies LayoutLoad;

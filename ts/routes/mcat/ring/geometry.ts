@@ -2,9 +2,20 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 export type JointName =
-    | "root" | "pelvis" | "spine" | "chest" | "neck" | "head"
-    | "armFront" | "forearmFront" | "armBack" | "forearmBack"
-    | "legFront" | "shinFront" | "legBack" | "shinBack";
+    | "root"
+    | "pelvis"
+    | "spine"
+    | "chest"
+    | "neck"
+    | "head"
+    | "armFront"
+    | "forearmFront"
+    | "armBack"
+    | "forearmBack"
+    | "legFront"
+    | "shinFront"
+    | "legBack"
+    | "shinBack";
 
 export const BUILD_BULK = { lean: 0, fit: 0.35, heavy: 0.7, colossal: 1 } as const;
 
@@ -12,8 +23,12 @@ const fmt = (n: number): string => n.toFixed(2);
 
 /** Closed tapered capsule from (x1,y1,r1) to (x2,y2,r2). */
 export function capsulePath(
-    x1: number, y1: number, r1: number,
-    x2: number, y2: number, r2: number,
+    x1: number,
+    y1: number,
+    r1: number,
+    x2: number,
+    y2: number,
+    r2: number,
 ): string {
     const dx = x2 - x1;
     const dy = y2 - y1;
@@ -41,8 +56,12 @@ export function pathCommandSequence(d: string): string[] {
  * capsulePath (two arc caps) but with C curves for the long edges so the
  * silhouette reads as organic muscle, not a straight-sided capsule. */
 export function organicLimbPath(
-    x1: number, y1: number, r1: number,
-    x2: number, y2: number, r2: number,
+    x1: number,
+    y1: number,
+    r1: number,
+    x2: number,
+    y2: number,
+    r2: number,
     bulge = 0.35,
 ): string {
     const dx = x2 - x1;
@@ -77,8 +96,13 @@ const GLOVE_ANGLES_DEG = [0, 55, 120, 180, 235, 300] as const;
  * keyframe with the same command structure as the rest pose, so the two
  * can be handed to the Web Animations API as `d` interpolation keyframes. */
 export function glovePath(
-    cx: number, cy: number, r: number,
-    facing: 1 | -1 = 1, squashX = 1, squashY = 1, thumbBulge = 0.28,
+    cx: number,
+    cy: number,
+    r: number,
+    facing: 1 | -1 = 1,
+    squashX = 1,
+    squashY = 1,
+    thumbBulge = 0.28,
 ): string {
     const pts = GLOVE_ANGLES_DEG.map((deg, i) => {
         const rad = (deg * Math.PI) / 180;
@@ -141,14 +165,27 @@ const TORSOS = [
 
 /* deltoid/pec/ab/oblique/serratus highlight strokes; opacity scales with bulk in the rig */
 const MUSCLES = [
-    "M 50 60 C 54 57 66 57 70 60",       // upper pec line
-    "M 52 70 C 56 73 64 73 68 70",       // lower pec / sternum
-    "M 56 78 L 56 86 M 64 78 L 64 86",   // ab center lines
-    "M 48 74 C 50 80 50 86 48 92",       // left oblique
-    "M 72 74 C 70 80 70 86 72 92",       // right oblique
-    "M 44 64 C 47 68 47 74 45 78",       // left serratus/lat hint
-    "M 76 64 C 73 68 73 74 75 78",       // right serratus/lat hint
+    "M 50 60 C 54 57 66 57 70 60", // upper pec line
+    "M 52 70 C 56 73 64 73 68 70", // lower pec / sternum
+    "M 56 78 L 56 86 M 64 78 L 64 86", // ab center lines
+    "M 48 74 C 50 80 50 86 48 92", // left oblique
+    "M 72 74 C 70 80 70 86 72 92", // right oblique
+    "M 44 64 C 47 68 47 74 45 78", // left serratus/lat hint
+    "M 76 64 C 73 68 73 74 75 78", // right serratus/lat hint
 ] as const;
+
+function torsoFor(bulk: number): string {
+    if (bulk < 0.2) {
+        return TORSOS[0];
+    }
+    if (bulk < 0.55) {
+        return TORSOS[1];
+    }
+    if (bulk < 0.85) {
+        return TORSOS[2];
+    }
+    return TORSOS[3];
+}
 
 export function bodyPaths(bulk: number): {
     limbs: Record<string, string>;
@@ -159,10 +196,12 @@ export function bodyPaths(bulk: number): {
     const a = (r: number) => widen(r, bulk, 0.35); // arms + neck
     const l = (r: number) => widen(r, bulk, 0.25); // legs
     const seg = (
-        from: [number, number], to: [number, number],
-        r: readonly [number, number], w: (r: number) => number,
+        from: [number, number],
+        to: [number, number],
+        r: readonly [number, number],
+        w: (r: number) => number,
     ) => organicLimbPath(from[0], from[1], w(r[0]), to[0], to[1], w(r[1]));
-    const torso = bulk < 0.2 ? TORSOS[0] : bulk < 0.55 ? TORSOS[1] : bulk < 0.85 ? TORSOS[2] : TORSOS[3];
+    const torso = torsoFor(bulk);
     return {
         limbs: {
             armFront: seg(j.armFront, j.forearmFront, LIMB_R.arm, a),

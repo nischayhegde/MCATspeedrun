@@ -26,7 +26,11 @@ Purely cosmetic; freezes under reduced-motion.
 {/key}
 {#key impact ? `${impact.x}-${impact.y}` : "none"}
     {#if impact}
-        <svg class="burst" style="left: {impact.x}%; top: {impact.y}%;" viewBox="-16 -16 32 32">
+        <svg
+            class="burst"
+            style="left: {impact.x}%; top: {impact.y}%;"
+            viewBox="-16 -16 32 32"
+        >
             <circle class="burst-flash" r="7" />
             <polygon
                 class="burst-shard"
@@ -102,14 +106,32 @@ Purely cosmetic; freezes under reduced-motion.
         background: rgb(0 0 0 / 35%);
     }
     @keyframes chyron-in {
-        0% { transform: translateX(12px) scaleX(0.7); opacity: 0; }
-        30% { transform: translateX(0) scaleX(1.05); opacity: 1; }
-        100% { transform: translateX(0) scaleX(1); opacity: 0; }
+        0% {
+            transform: translateX(12px) scaleX(0.7);
+            opacity: 0;
+        }
+        30% {
+            transform: translateX(0) scaleX(1.05);
+            opacity: 1;
+        }
+        100% {
+            transform: translateX(0) scaleX(1);
+            opacity: 0;
+        }
     }
     @keyframes chyron-in-mid {
-        0% { transform: translateX(-50%) translateY(6px); opacity: 0; }
-        30% { transform: translateX(-50%) translateY(0); opacity: 1; }
-        100% { transform: translateX(-50%) translateY(0); opacity: 0; }
+        0% {
+            transform: translateX(-50%) translateY(6px);
+            opacity: 0;
+        }
+        30% {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+        100% {
+            transform: translateX(-50%) translateY(0);
+            opacity: 0;
+        }
     }
     .burst {
         position: absolute;
@@ -133,8 +155,14 @@ Purely cosmetic; freezes under reduced-motion.
         stroke-linecap: round;
     }
     @keyframes burst-pop {
-        0% { transform: scale(0.3); opacity: 1; }
-        100% { transform: scale(1.2); opacity: 0; }
+        0% {
+            transform: scale(0.3);
+            opacity: 1;
+        }
+        100% {
+            transform: scale(1.2);
+            opacity: 0;
+        }
     }
     .dust {
         position: absolute;
@@ -149,9 +177,17 @@ Purely cosmetic; freezes under reduced-motion.
         fill: rgb(210 200 180 / 55%);
     }
     @keyframes dust-rise {
-        0% { transform: translateX(-50%) translateY(4px); opacity: 0; }
-        30% { opacity: 0.8; }
-        100% { transform: translateX(-50%) translateY(-10px); opacity: 0; }
+        0% {
+            transform: translateX(-50%) translateY(4px);
+            opacity: 0;
+        }
+        30% {
+            opacity: 0.8;
+        }
+        100% {
+            transform: translateX(-50%) translateY(-10px);
+            opacity: 0;
+        }
     }
     .sweat {
         position: absolute;
@@ -167,9 +203,17 @@ Purely cosmetic; freezes under reduced-motion.
         opacity: 0.85;
     }
     @keyframes sweat-fly {
-        0% { transform: translateX(-50%) translateY(0) scale(0.6); opacity: 0; }
-        40% { opacity: 0.9; }
-        100% { transform: translateX(-50%) translateY(-14px) scale(1); opacity: 0; }
+        0% {
+            transform: translateX(-50%) translateY(0) scale(0.6);
+            opacity: 0;
+        }
+        40% {
+            opacity: 0.9;
+        }
+        100% {
+            transform: translateX(-50%) translateY(-14px) scale(1);
+            opacity: 0;
+        }
     }
     @media (prefers-reduced-motion: reduce) {
         .chyron {

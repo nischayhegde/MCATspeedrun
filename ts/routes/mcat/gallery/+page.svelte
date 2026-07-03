@@ -22,10 +22,18 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     ); // bullhorn (tier 5)
     const eventKinds: FightEventKind[] = [
         "question",
-        "fast-correct", "slow-correct", "wrong", "idk",
-        "rate-again", "rate-hard", "rate-good", "rate-easy",
+        "fast-correct",
+        "slow-correct",
+        "wrong",
+        "idk",
+        "rate-again",
+        "rate-hard",
+        "rate-good",
+        "rate-easy",
         "bag-hit",
-        "results-win", "results-draw", "results-loss",
+        "results-win",
+        "results-draw",
+        "results-loss",
     ];
     let ringTrigger = 0;
     let ringEvent: { kind: FightEventKind; trigger: number } | null = null;
@@ -49,9 +57,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     $: def = CLIPS[selected];
     $: badge = def?.badge ?? null;
-    $: bagSwing = selected.startsWith("bag-") && selected !== "bag-sway"
-        ? selected.slice("bag-".length)
-        : null;
+    $: bagSwing =
+        selected.startsWith("bag-") && selected !== "bag-sway"
+            ? selected.slice("bag-".length)
+            : null;
 
     // Opponent plays its own opp- variant when one exists, else mirrors the
     // hero clip (rig is facing-mirrored, so the reuse reads correctly).

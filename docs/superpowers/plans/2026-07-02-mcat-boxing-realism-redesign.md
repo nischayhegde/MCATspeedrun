@@ -24,10 +24,12 @@
 ### Task 1: `shadeColor` color utility
 
 **Files:**
+
 - Create: `ts/routes/mcat/ring/color.ts`
 - Test: `ts/routes/mcat/ring/color.test.ts`
 
 **Interfaces:**
+
 - Produces: `shadeColor(hex: string, percent: number): string` — `percent` in `[-1, 1]`; positive lightens toward white, negative darkens toward black. Used by Task 5 to build gradient stops from flat palette hex colors.
 
 - [ ] **Step 1: Write the failing tests**
@@ -84,9 +86,12 @@ export function shadeColor(hex: string, percent: number): string {
     const r = (num >> 16) & 0xff;
     const g = (num >> 8) & 0xff;
     const b = num & 0xff;
-    const clamp = (v: number): number => Math.max(0, Math.min(255, Math.round(v)));
+    const clamp = (v: number): number =>
+        Math.max(0, Math.min(255, Math.round(v)));
     const mix = (channel: number): number =>
-        percent >= 0 ? channel + (255 - channel) * percent : channel * (1 + percent);
+        percent >= 0
+            ? channel + (255 - channel) * percent
+            : channel * (1 + percent);
     const toHex = (v: number): string => clamp(v).toString(16).padStart(2, "0");
     return `#${toHex(mix(r))}${toHex(mix(g))}${toHex(mix(b))}`;
 }
@@ -109,10 +114,12 @@ git commit -m "feat(mcat): add shadeColor utility for procedural gradient shadin
 ### Task 2: Organic limb/glove geometry + richer muscle overlay
 
 **Files:**
+
 - Modify: `ts/routes/mcat/ring/geometry.ts`
 - Test: `ts/routes/mcat/ring/geometry.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing new (pure math, same module).
 - Produces:
   - `organicLimbPath(x1, y1, r1, x2, y2, r2, bulge = 0.35): string` — same closed-path contract as `capsulePath` (starts `M`, exactly 2 `A` arc caps, ends `Z`) but with a bezier "muscle belly" bulge instead of straight sides. `bodyPaths()`'s internal `seg()` helper now calls this instead of `capsulePath` (which stays exported/untouched — it still has its own passing test and Task 5 doesn't need it removed).
@@ -142,15 +149,34 @@ test("organicLimbPath's bezier control points push further from the spine than t
 });
 
 test("pathCommandSequence extracts command letters in order", () => {
-    expect(pathCommandSequence("M 1 2 L 3 4 A 5 5 0 0 0 6 7 Z")).toEqual(["M", "L", "A", "Z"]);
-    expect(pathCommandSequence("M 0 0 Q 1 1 2 2 Q 3 3 4 4 Z")).toEqual(["M", "Q", "Q", "Z"]);
+    expect(pathCommandSequence("M 1 2 L 3 4 A 5 5 0 0 0 6 7 Z")).toEqual([
+        "M",
+        "L",
+        "A",
+        "Z",
+    ]);
+    expect(pathCommandSequence("M 0 0 Q 1 1 2 2 Q 3 3 4 4 Z")).toEqual([
+        "M",
+        "Q",
+        "Q",
+        "Z",
+    ]);
 });
 
 test("glovePath always emits the same 8-command structure regardless of squash", () => {
     const rest = glovePath(50, 50, 10, 1);
     const squashed = glovePath(50, 50, 10, 1, 1.3, 0.85);
     const mirrored = glovePath(50, 50, 10, -1);
-    expect(pathCommandSequence(rest)).toEqual(["M", "Q", "Q", "Q", "Q", "Q", "Q", "Z"]);
+    expect(pathCommandSequence(rest)).toEqual([
+        "M",
+        "Q",
+        "Q",
+        "Q",
+        "Q",
+        "Q",
+        "Q",
+        "Z",
+    ]);
     expect(pathCommandSequence(rest)).toEqual(pathCommandSequence(squashed));
     expect(pathCommandSequence(rest)).toEqual(pathCommandSequence(mirrored));
     expect(rest).not.toBe(squashed);
@@ -159,7 +185,14 @@ test("glovePath always emits the same 8-command structure regardless of squash",
 
 test("bodyPaths limbs now use the organic (bezier) generator", () => {
     const paths = bodyPaths(0.5);
-    expect(pathCommandSequence(paths.limbs.armFront)).toEqual(["M", "C", "A", "C", "A", "Z"]);
+    expect(pathCommandSequence(paths.limbs.armFront)).toEqual([
+        "M",
+        "C",
+        "A",
+        "C",
+        "A",
+        "Z",
+    ]);
 });
 
 test("muscle overlay has 7 definition lines", () => {
@@ -170,7 +203,15 @@ test("muscle overlay has 7 definition lines", () => {
 Update the test file's import line to pull in the new exports:
 
 ```typescript
-import { BUILD_BULK, bodyPaths, capsulePath, glovePath, joints, organicLimbPath, pathCommandSequence } from "./geometry";
+import {
+    bodyPaths,
+    BUILD_BULK,
+    capsulePath,
+    glovePath,
+    joints,
+    organicLimbPath,
+    pathCommandSequence,
+} from "./geometry";
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -193,8 +234,12 @@ export function pathCommandSequence(d: string): string[] {
  * capsulePath (two arc caps) but with C curves for the long edges so the
  * silhouette reads as organic muscle, not a straight-sided capsule. */
 export function organicLimbPath(
-    x1: number, y1: number, r1: number,
-    x2: number, y2: number, r2: number,
+    x1: number,
+    y1: number,
+    r1: number,
+    x2: number,
+    y2: number,
+    r2: number,
     bulge = 0.35,
 ): string {
     const dx = x2 - x1;
@@ -213,10 +258,18 @@ export function organicLimbPath(
     const d2y = y1 + dy * 0.33 - ny * (r1 + bulgeAmt);
     return [
         `M ${fmt(x1 + nx * r1)} ${fmt(y1 + ny * r1)}`,
-        `C ${fmt(c1x)} ${fmt(c1y)} ${fmt(c2x)} ${fmt(c2y)} ${fmt(x2 + nx * r2)} ${fmt(y2 + ny * r2)}`,
-        `A ${fmt(r2)} ${fmt(r2)} 0 0 0 ${fmt(x2 - nx * r2)} ${fmt(y2 - ny * r2)}`,
-        `C ${fmt(d1x)} ${fmt(d1y)} ${fmt(d2x)} ${fmt(d2y)} ${fmt(x1 - nx * r1)} ${fmt(y1 - ny * r1)}`,
-        `A ${fmt(r1)} ${fmt(r1)} 0 0 0 ${fmt(x1 + nx * r1)} ${fmt(y1 + ny * r1)}`,
+        `C ${fmt(c1x)} ${fmt(c1y)} ${fmt(c2x)} ${fmt(c2y)} ${
+            fmt(x2 + nx * r2)
+        } ${fmt(y2 + ny * r2)}`,
+        `A ${fmt(r2)} ${fmt(r2)} 0 0 0 ${fmt(x2 - nx * r2)} ${
+            fmt(y2 - ny * r2)
+        }`,
+        `C ${fmt(d1x)} ${fmt(d1y)} ${fmt(d2x)} ${fmt(d2y)} ${
+            fmt(x1 - nx * r1)
+        } ${fmt(y1 - ny * r1)}`,
+        `A ${fmt(r1)} ${fmt(r1)} 0 0 0 ${fmt(x1 + nx * r1)} ${
+            fmt(y1 + ny * r1)
+        }`,
         "Z",
     ].join(" ");
 }
@@ -229,8 +282,13 @@ const GLOVE_ANGLES_DEG = [0, 55, 120, 180, 235, 300] as const;
  * keyframe with the same command structure as the rest pose, so the two
  * can be handed to the Web Animations API as `d` interpolation keyframes. */
 export function glovePath(
-    cx: number, cy: number, r: number,
-    facing: 1 | -1 = 1, squashX = 1, squashY = 1, thumbBulge = 0.28,
+    cx: number,
+    cy: number,
+    r: number,
+    facing: 1 | -1 = 1,
+    squashX = 1,
+    squashY = 1,
+    thumbBulge = 0.28,
 ): string {
     const pts = GLOVE_ANGLES_DEG.map((deg, i) => {
         const rad = (deg * Math.PI) / 180;
@@ -240,13 +298,18 @@ export function glovePath(
             cy + Math.sin(rad) * rr * squashY,
         ];
     });
-    const mid = (a: number[], b: number[]): [number, number] => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    const mid = (
+        a: number[],
+        b: number[],
+    ): [number, number] => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
     const n = pts.length;
     const start = mid(pts[n - 1], pts[0]);
     let d = `M ${fmt(start[0])} ${fmt(start[1])}`;
     for (let i = 0; i < n; i++) {
         const end = mid(pts[i], pts[(i + 1) % n]);
-        d += ` Q ${fmt(pts[i][0])} ${fmt(pts[i][1])} ${fmt(end[0])} ${fmt(end[1])}`;
+        d += ` Q ${fmt(pts[i][0])} ${fmt(pts[i][1])} ${fmt(end[0])} ${
+            fmt(end[1])
+        }`;
     }
     return `${d} Z`;
 }
@@ -257,23 +320,25 @@ Replace the `MUSCLES` constant (current lines 74-79) with:
 ```typescript
 /* deltoid/pec/ab/oblique/serratus highlight strokes; opacity scales with bulk in the rig */
 const MUSCLES = [
-    "M 50 60 C 54 57 66 57 70 60",       // upper pec line
-    "M 52 70 C 56 73 64 73 68 70",       // lower pec / sternum
-    "M 56 78 L 56 86 M 64 78 L 64 86",   // ab center lines
-    "M 48 74 C 50 80 50 86 48 92",       // left oblique
-    "M 72 74 C 70 80 70 86 72 92",       // right oblique
-    "M 44 64 C 47 68 47 74 45 78",       // left serratus/lat hint
-    "M 76 64 C 73 68 73 74 75 78",       // right serratus/lat hint
+    "M 50 60 C 54 57 66 57 70 60", // upper pec line
+    "M 52 70 C 56 73 64 73 68 70", // lower pec / sternum
+    "M 56 78 L 56 86 M 64 78 L 64 86", // ab center lines
+    "M 48 74 C 50 80 50 86 48 92", // left oblique
+    "M 72 74 C 70 80 70 86 72 92", // right oblique
+    "M 44 64 C 47 68 47 74 45 78", // left serratus/lat hint
+    "M 76 64 C 73 68 73 74 75 78", // right serratus/lat hint
 ] as const;
 ```
 
 In `bodyPaths()`, change the `seg` helper (current lines 89-92) to call `organicLimbPath` instead of `capsulePath`:
 
 ```typescript
-    const seg = (
-        from: [number, number], to: [number, number],
-        r: readonly [number, number], w: (r: number) => number,
-    ) => organicLimbPath(from[0], from[1], w(r[0]), to[0], to[1], w(r[1]));
+const seg = (
+    from: [number, number],
+    to: [number, number],
+    r: readonly [number, number],
+    w: (r: number) => number,
+) => organicLimbPath(from[0], from[1], w(r[0]), to[0], to[1], w(r[1]));
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
@@ -293,10 +358,12 @@ git commit -m "feat(mcat): organic limb/glove geometry + richer muscle overlay"
 ### Task 3: WAAPI path-morph helper
 
 **Files:**
+
 - Create: `ts/routes/mcat/ring/morph.ts`
 - Test: `ts/routes/mcat/ring/morph.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing from earlier tasks directly (independent utility); Task 5 will pass it `d` strings built with `Task 2`'s `glovePath`/`organicLimbPath`.
 - Produces: `morphPath(el: MorphTarget, keyframeDs: string[], opts: { durationMs: number; easing?: string }): void` where `MorphTarget` declares `animate(keyframes: Array<Record<string, string>>, options: unknown): unknown` using **method-shorthand syntax** (not an arrow-typed property) — this is required, not stylistic: TypeScript checks method-shorthand members bivariantly, which is what lets a real `SVGPathElement` (whose native `.animate()` has a narrower, DOM-specific second-parameter type) satisfy this structural interface. An arrow-typed property (`animate: (keyframes, options) => unknown`) would use strict contravariant checking under `strictFunctionTypes` and fail to accept real DOM elements. Reads `window.matchMedia?.("(prefers-reduced-motion: reduce)").matches` and no-ops (skips the animation entirely, leaving the element at its already-rendered rest `d`) when the user has reduced motion set.
 
@@ -330,8 +397,15 @@ test("calls animate with d keyframes and the given duration", () => {
     const el = { animate: (...args: unknown[]) => calls.push(args) };
     morphPath(el, ["M 0 0 Z", "M 1 1 Z", "M 0 0 Z"], { durationMs: 560 });
     expect(calls.length).toBe(1);
-    const [keyframes, options] = calls[0] as [Array<{ d: string }>, { duration: number }];
-    expect(keyframes.map((k) => k.d)).toEqual(["M 0 0 Z", "M 1 1 Z", "M 0 0 Z"]);
+    const [keyframes, options] = calls[0] as [
+        Array<{ d: string }>,
+        { duration: number },
+    ];
+    expect(keyframes.map((k) => k.d)).toEqual([
+        "M 0 0 Z",
+        "M 1 1 Z",
+        "M 0 0 Z",
+    ]);
     expect(options.duration).toBe(560);
 });
 
@@ -340,7 +414,10 @@ test("passes a default easing when none is given, or the caller's easing when gi
     const calls: unknown[][] = [];
     const el = { animate: (...args: unknown[]) => calls.push(args) };
     morphPath(el, ["M 0 0 Z", "M 1 1 Z"], { durationMs: 300 });
-    morphPath(el, ["M 0 0 Z", "M 1 1 Z"], { durationMs: 300, easing: "linear" });
+    morphPath(el, ["M 0 0 Z", "M 1 1 Z"], {
+        durationMs: 300,
+        easing: "linear",
+    });
     const [, opts1] = calls[0] as [unknown, { easing: string }];
     const [, opts2] = calls[1] as [unknown, { easing: string }];
     expect(opts1.easing).toBeTruthy();
@@ -357,7 +434,11 @@ test("no-ops under prefers-reduced-motion", () => {
 
 test("does nothing (does not throw) when fewer than 2 keyframes are given", () => {
     fakeMatchMedia(false);
-    const el = { animate: () => { throw new Error("should not be called"); } };
+    const el = {
+        animate: () => {
+            throw new Error("should not be called");
+        },
+    };
     expect(() => morphPath(el, ["M 0 0 Z"], { durationMs: 300 })).not.toThrow();
 });
 ```
@@ -380,7 +461,10 @@ Expected: FAIL — `Cannot find module './morph'`.
 // this member bivariantly, which is what lets a real SVGPathElement's
 // narrower native `.animate()` signature satisfy this interface.
 export interface MorphTarget {
-    animate(keyframes: Array<Record<string, string>>, options: unknown): unknown;
+    animate(
+        keyframes: Array<Record<string, string>>,
+        options: unknown,
+    ): unknown;
 }
 
 export interface MorphOptions {
@@ -391,7 +475,8 @@ export interface MorphOptions {
 const DEFAULT_EASING = "cubic-bezier(0.2, 0.9, 0.1, 1)";
 
 function reducedMotion(): boolean {
-    return globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    return globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+        ?? false;
 }
 
 /** Animate an SVG element's `d` attribute through a sequence of path
@@ -399,13 +484,21 @@ function reducedMotion(): boolean {
  * command structure (see geometry.ts's pathCommandSequence) or the browser
  * cannot interpolate between them. No-ops under prefers-reduced-motion or
  * with fewer than 2 keyframes. */
-export function morphPath(el: MorphTarget, keyframeDs: string[], opts: MorphOptions): void {
+export function morphPath(
+    el: MorphTarget,
+    keyframeDs: string[],
+    opts: MorphOptions,
+): void {
     if (keyframeDs.length < 2 || reducedMotion()) {
         return;
     }
     el.animate(
         keyframeDs.map((d) => ({ d })),
-        { duration: opts.durationMs, easing: opts.easing ?? DEFAULT_EASING, fill: "none" },
+        {
+            duration: opts.durationMs,
+            easing: opts.easing ?? DEFAULT_EASING,
+            fill: "none",
+        },
     );
 }
 ```
@@ -427,10 +520,12 @@ git commit -m "feat(mcat): WAAPI path-morph helper with reduced-motion guard"
 ### Task 4: Direction-D palette + texture data + wave-1 species art
 
 **Files:**
+
 - Modify: `ts/routes/mcat/ring/roster.ts`
 - Modify: `ts/routes/mcat/ring/roster.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing new.
 - Produces: `SpeciesSpec` gains an optional `texture?: "scale" | "fur" | "crack" | "hide" | "warpaint"` field (all 7 species get one; Task 5 switches on it). `Palette` interface is **unchanged in shape** — only hex values change. `HERO.palettes[0].glove` becomes `"#c81e2c"` (a richer key-art red instead of the flatter `#e11d2f`) — the one intentional test-value update called out in Global Constraints.
 
@@ -457,126 +552,136 @@ export interface SpeciesSpec {
 Replace each species' `palettes` array with moodier, richer key-art values (same shape, deeper/less flat hues) and add `texture`. Rookie (current lines 45-54) becomes:
 
 ```typescript
-    rookie: {
-        id: "rookie", name: "ROOKIE", chassis: "biped", build: "lean",
-        headPath: "M 51 29 C 47 33 46 40 48 46 C 50 51 55 54 61 53 C 68 52 72 46 71 39 C 70 32 64 27 57 28 C 55 28 53 28 51 29 Z",
-        extraPaths: ["M 49 27 A 13 13 0 0 1 76 31 L 71 40 A 9 9 0 0 0 53 37 Z"],
-        palettes: [
-            { skin: "#c9a181", trunks: "#2f3644", glove: "#3a4152", accent: "#8f97a8" },
-            { skin: "#a9846a", trunks: "#33465a", glove: "#3d4f61", accent: "#9aa6b8" },
-        ],
-        hitSfx: "BAP!", amp: 1.15, wt: 0.9,
-        texture: "hide",
-    },
+rookie: {
+    id: "rookie", name: "ROOKIE", chassis: "biped", build: "lean",
+    headPath: "M 51 29 C 47 33 46 40 48 46 C 50 51 55 54 61 53 C 68 52 72 46 71 39 C 70 32 64 27 57 28 C 55 28 53 28 51 29 Z",
+    extraPaths: ["M 49 27 A 13 13 0 0 1 76 31 L 71 40 A 9 9 0 0 0 53 37 Z"],
+    palettes: [
+        { skin: "#c9a181", trunks: "#2f3644", glove: "#3a4152", accent: "#8f97a8" },
+        { skin: "#a9846a", trunks: "#33465a", glove: "#3d4f61", accent: "#9aa6b8" },
+    ],
+    hitSfx: "BAP!", amp: 1.15, wt: 0.9,
+    texture: "hide",
+},
 ```
 
 Hobnail (current lines 69-83) becomes:
 
 ```typescript
-    hobnail: {
-        id: "hobnail", name: "HOBNAIL", chassis: "biped", build: "heavy",
-        headPath: "M 49 31 C 51 24 58 20 65 21 C 73 22 78 29 77 38 C 76 46 69 52 61 51 C 53 50 48 44 48 37 C 48 35 48 33 49 31 Z",
-        extraPaths: [
-            "M 37 65 C 38 53 47 47 55 49 C 58 45 65 45 68 49 C 76 47 84 53 85 65 C 61 60 37 65 37 65 Z",
-            "M 46 34 L 33 26 L 47 40 Z",
-            "M 76 34 L 89 26 L 75 40 Z",
-        ],
-        palettes: [
-            { skin: "#565b3e", trunks: "#2c3125", glove: "#3d4230", accent: "#6a7050" },
-            { skin: "#4c5140", trunks: "#31352b", glove: "#42473a", accent: "#767c5a" },
-        ],
-        hitSfx: "CRACK!", amp: 0.95, wt: 1.1,
-        texture: "hide",
-    },
+hobnail: {
+    id: "hobnail", name: "HOBNAIL", chassis: "biped", build: "heavy",
+    headPath: "M 49 31 C 51 24 58 20 65 21 C 73 22 78 29 77 38 C 76 46 69 52 61 51 C 53 50 48 44 48 37 C 48 35 48 33 49 31 Z",
+    extraPaths: [
+        "M 37 65 C 38 53 47 47 55 49 C 58 45 65 45 68 49 C 76 47 84 53 85 65 C 61 60 37 65 37 65 Z",
+        "M 46 34 L 33 26 L 47 40 Z",
+        "M 76 34 L 89 26 L 75 40 Z",
+    ],
+    palettes: [
+        { skin: "#565b3e", trunks: "#2c3125", glove: "#3d4230", accent: "#6a7050" },
+        { skin: "#4c5140", trunks: "#31352b", glove: "#42473a", accent: "#767c5a" },
+    ],
+    hitSfx: "CRACK!", amp: 0.95, wt: 1.1,
+    texture: "hide",
+},
 ```
 
 Bullhorn (current lines 106-121) becomes:
 
 ```typescript
-    bullhorn: {
-        id: "bullhorn", name: "BULLHORN", chassis: "biped", build: "colossal",
-        headPath: "M 49 31 C 53 22 63 19 71 24 C 78 29 80 39 74 47 L 68 54 C 63 57 58 57 54 54 L 49 48 C 43 41 45 35 49 31 Z",
-        extraPaths: [
-            "M 51 32 C 39 30 29 23 29 16 C 29 12 32 10 35 12 C 38 18 47 22 56 26 Z",
-            "M 71 32 C 83 30 93 23 93 16 C 93 12 90 10 87 12 C 84 18 75 22 66 26 Z",
-            "M 58 51 C 62 55 66 51 66 51",
-        ],
-        palettes: [
-            { skin: "#231f20", trunks: "#191617", glove: "#312b2d", accent: "#7a5f28" },
-            { skin: "#282324", trunks: "#1e1a1b", glove: "#383133", accent: "#8a6d2f" },
-        ],
-        hitSfx: "THUD!", amp: 0.8, wt: 1.25,
-        texture: "hide",
-    },
+bullhorn: {
+    id: "bullhorn", name: "BULLHORN", chassis: "biped", build: "colossal",
+    headPath: "M 49 31 C 53 22 63 19 71 24 C 78 29 80 39 74 47 L 68 54 C 63 57 58 57 54 54 L 49 48 C 43 41 45 35 49 31 Z",
+    extraPaths: [
+        "M 51 32 C 39 30 29 23 29 16 C 29 12 32 10 35 12 C 38 18 47 22 56 26 Z",
+        "M 71 32 C 83 30 93 23 93 16 C 93 12 90 10 87 12 C 84 18 75 22 66 26 Z",
+        "M 58 51 C 62 55 66 51 66 51",
+    ],
+    palettes: [
+        { skin: "#231f20", trunks: "#191617", glove: "#312b2d", accent: "#7a5f28" },
+        { skin: "#282324", trunks: "#1e1a1b", glove: "#383133", accent: "#8a6d2f" },
+    ],
+    hitSfx: "THUD!", amp: 0.8, wt: 1.25,
+    texture: "hide",
+},
 ```
 
 For the remaining four species (data-only pass — silhouette geometry is untouched, only `palettes`/`texture` change; fast-follow plan owns their head/extraPaths redraw), replace their full entries with (headPath/extraPaths copied verbatim from the current file, only `palettes`/`texture` are new):
 
 ```typescript
-    sidewinder: {
-        id: "sidewinder", name: "SIDEWINDER", chassis: "biped", build: "fit",
-        headPath: "M 50 34 Q 58 26 70 32 Q 76 38 70 48 Q 58 54 50 46 Z",
-        extraPaths: [
-            "M 48 34 Q 52 12 60 8 Q 68 10 72 20 Q 66 22 62 26 Q 56 30 52 36 Z",
-            "M 70 40 Q 79 40 82 45",
-        ],
-        palettes: [
-            { skin: "#33504a", trunks: "#25403f", glove: "#2f4644", accent: "#4f6a63" },
-            { skin: "#3a4c45", trunks: "#2a3e44", glove: "#324744", accent: "#576f66" },
-        ],
-        hitSfx: "SSAK!", amp: 1.1, wt: 0.95,
-        texture: "scale",
-    },
-    howler: {
-        id: "howler", name: "HOWLER", chassis: "biped", build: "heavy",
-        headPath: "M 48 34 Q 56 25 66 29 L 86 40 Q 78 50 62 52 Q 50 50 48 42 Z",
-        extraPaths: ["M 51 27 L 45 12 L 60 22 Z", "M 62 26 L 63 10 L 73 22 Z"],
-        palettes: [
-            { skin: "#22252c", trunks: "#1c1f28", glove: "#2c303c", accent: "#3f4450", fur: "#3f4450" },
-            { skin: "#282c36", trunks: "#22252f", glove: "#333844", accent: "#464c59", fur: "#464c59" },
-        ],
-        hitSfx: "AWROO!", amp: 1.05, wt: 1.0,
-        texture: "fur",
-    },
-    gravel: {
-        id: "gravel", name: "GRAVEL", chassis: "biped", build: "colossal",
-        headPath: "M 50 30 L 76 30 L 78 48 L 48 48 Z",
-        extraPaths: ["M 54 34 L 60 44", "M 66 32 L 70 46"],
-        palettes: [
-            { skin: "#2a2d33", trunks: "#212429", glove: "#33373d", accent: "#8c1019" },
-            { skin: "#2f3238", trunks: "#26292e", glove: "#383c42", accent: "#7a0e16" },
-        ],
-        hitSfx: "THOOM!", amp: 0.8, wt: 1.25,
-        texture: "crack",
-    },
-    chiron: {
-        id: "chiron", name: "CHIRON, WARLORD", chassis: "taur", build: "colossal",
-        headPath: "M 52 30 Q 62 22 72 30 Q 76 40 70 48 Q 60 54 52 46 Z",
-        extraPaths: [
-            "M 52 30 Q 50 12 58 6 Q 62 8 62 18 Q 64 8 70 8 Q 72 16 68 24 Q 64 26 60 28 Q 56 30 52 30 Z",
-            "M 53 37 L 71 35 L 71 40 L 53 42 Z",
-            "M 55 45 L 69 44 L 69 48 L 56 49 Z",
-        ],
-        palettes: [
-            { skin: "#302520", trunks: "#241b17", glove: "#3c2f27", accent: "#8c1019" },
-            { skin: "#362a24", trunks: "#291f1b", glove: "#453630", accent: "#7a0e16" },
-        ],
-        hitSfx: "BOOM!", amp: 0.85, wt: 1.2,
-        texture: "warpaint",
-    },
+sidewinder: {
+    id: "sidewinder", name: "SIDEWINDER", chassis: "biped", build: "fit",
+    headPath: "M 50 34 Q 58 26 70 32 Q 76 38 70 48 Q 58 54 50 46 Z",
+    extraPaths: [
+        "M 48 34 Q 52 12 60 8 Q 68 10 72 20 Q 66 22 62 26 Q 56 30 52 36 Z",
+        "M 70 40 Q 79 40 82 45",
+    ],
+    palettes: [
+        { skin: "#33504a", trunks: "#25403f", glove: "#2f4644", accent: "#4f6a63" },
+        { skin: "#3a4c45", trunks: "#2a3e44", glove: "#324744", accent: "#576f66" },
+    ],
+    hitSfx: "SSAK!", amp: 1.1, wt: 0.95,
+    texture: "scale",
+},
+howler: {
+    id: "howler", name: "HOWLER", chassis: "biped", build: "heavy",
+    headPath: "M 48 34 Q 56 25 66 29 L 86 40 Q 78 50 62 52 Q 50 50 48 42 Z",
+    extraPaths: ["M 51 27 L 45 12 L 60 22 Z", "M 62 26 L 63 10 L 73 22 Z"],
+    palettes: [
+        { skin: "#22252c", trunks: "#1c1f28", glove: "#2c303c", accent: "#3f4450", fur: "#3f4450" },
+        { skin: "#282c36", trunks: "#22252f", glove: "#333844", accent: "#464c59", fur: "#464c59" },
+    ],
+    hitSfx: "AWROO!", amp: 1.05, wt: 1.0,
+    texture: "fur",
+},
+gravel: {
+    id: "gravel", name: "GRAVEL", chassis: "biped", build: "colossal",
+    headPath: "M 50 30 L 76 30 L 78 48 L 48 48 Z",
+    extraPaths: ["M 54 34 L 60 44", "M 66 32 L 70 46"],
+    palettes: [
+        { skin: "#2a2d33", trunks: "#212429", glove: "#33373d", accent: "#8c1019" },
+        { skin: "#2f3238", trunks: "#26292e", glove: "#383c42", accent: "#7a0e16" },
+    ],
+    hitSfx: "THOOM!", amp: 0.8, wt: 1.25,
+    texture: "crack",
+},
+chiron: {
+    id: "chiron", name: "CHIRON, WARLORD", chassis: "taur", build: "colossal",
+    headPath: "M 52 30 Q 62 22 72 30 Q 76 40 70 48 Q 60 54 52 46 Z",
+    extraPaths: [
+        "M 52 30 Q 50 12 58 6 Q 62 8 62 18 Q 64 8 70 8 Q 72 16 68 24 Q 64 26 60 28 Q 56 30 52 30 Z",
+        "M 53 37 L 71 35 L 71 40 L 53 42 Z",
+        "M 55 45 L 69 44 L 69 48 L 56 49 Z",
+    ],
+    palettes: [
+        { skin: "#302520", trunks: "#241b17", glove: "#3c2f27", accent: "#8c1019" },
+        { skin: "#362a24", trunks: "#291f1b", glove: "#453630", accent: "#7a0e16" },
+    ],
+    hitSfx: "BOOM!", amp: 0.85, wt: 1.2,
+    texture: "warpaint",
+},
 ```
 
 Update `HERO` (current lines 142-150):
 
 ```typescript
 export const HERO: SpeciesSpec = {
-    id: "rookie", name: "YOU", chassis: "biped", build: "lean",
+    id: "rookie",
+    name: "YOU",
+    chassis: "biped",
+    build: "lean",
     headPath: SPECIES.rookie.headPath,
     extraPaths: SPECIES.rookie.extraPaths,
     palettes: [
-        { skin: "#e0b088", trunks: "#a3121c", glove: "#c81e2c", accent: "#f5c451" },
+        {
+            skin: "#e0b088",
+            trunks: "#a3121c",
+            glove: "#c81e2c",
+            accent: "#f5c451",
+        },
     ],
-    hitSfx: "POW!", amp: 1.0, wt: 1.0,
+    hitSfx: "POW!",
+    amp: 1.0,
+    wt: 1.0,
     texture: "hide",
 };
 ```
@@ -622,9 +727,11 @@ git commit -m "feat(mcat): key-art palette + material texture per species, redra
 ### Task 5: FighterRig — gradients, AO/rim light, mitt gloves, texture overlays, morph wiring
 
 **Files:**
+
 - Modify: `ts/routes/mcat/ring/FighterRig.svelte`
 
 **Interfaces:**
+
 - Consumes: `shadeColor` (Task 1), `organicLimbPath`/`glovePath`/`pathCommandSequence` (Task 2, `glovePath` and `pathCommandSequence` newly used here; `organicLimbPath` already wired transitively via `bodyPaths()`), `morphPath` (Task 3), `SpeciesSpec.texture` (Task 4).
 - Produces: no public prop/event changes — `FightRing.svelte`, `StudyPage.svelte`, `DiagnosticPage.svelte`, `McatDashboard.svelte` (none of which pass `staticPose` portraits anymore per the earlier opponents-list removal, but `FighterRig` still supports it), and the gallery all keep working against the existing `spec/bulk/paletteIndex/facing/scale/stance/clip/clipTrigger/staticPose` prop contract.
 
@@ -692,54 +799,84 @@ Modify the top of `ts/routes/mcat/ring/FighterRig.svelte` (current lines 5-38):
 Insert after the `origin` helper, still inside `<script>`:
 
 ```typescript
-    // Organic deformation on top of the existing rotation-based joint system,
-    // for the highest-impact one-shots only (see plan Task 5). Each entry
-    // gives the element ref getter, a duration matching the clip's CSS
-    // animation-duration (see clips.ts), and rest/peak `d` keyframes built
-    // from the same geometry functions used for static rendering.
-    let gloveFrontEl: SVGPathElement | undefined;
-    let gloveBackEl: SVGPathElement | undefined;
+// Organic deformation on top of the existing rotation-based joint system,
+// for the highest-impact one-shots only (see plan Task 5). Each entry
+// gives the element ref getter, a duration matching the clip's CSS
+// animation-duration (see clips.ts), and rest/peak `d` keyframes built
+// from the same geometry functions used for static rendering.
+let gloveFrontEl: SVGPathElement | undefined;
+let gloveBackEl: SVGPathElement | undefined;
 
-    const MORPH_DURATION_MS: Record<string, number> = {
-        "atk-cross": 560,
-        "atk-uppercut": 620,
-        "atk-hook": 580,
-        "hit-head-snap": 480,
-        "hit-gut-fold": 560,
-    };
+const MORPH_DURATION_MS: Record<string, number> = {
+    "atk-cross": 560,
+    "atk-uppercut": 620,
+    "atk-hook": 580,
+    "hit-head-snap": 480,
+    "hit-gut-fold": 560,
+};
 
-    function frontGloveD(squashX: number, squashY: number): string {
-        return glovePath(j.forearmFront[0] + 8, j.forearmFront[1] + 14, gloveR, mirror as 1 | -1, squashX, squashY);
-    }
-    function backGloveD(squashX: number, squashY: number): string {
-        return glovePath(j.forearmBack[0] - 6, j.forearmBack[1] + 14, gloveR, -mirror as 1 | -1, squashX, squashY);
-    }
+function frontGloveD(squashX: number, squashY: number): string {
+    return glovePath(
+        j.forearmFront[0] + 8,
+        j.forearmFront[1] + 14,
+        gloveR,
+        mirror as 1 | -1,
+        squashX,
+        squashY,
+    );
+}
+function backGloveD(squashX: number, squashY: number): string {
+    return glovePath(
+        j.forearmBack[0] - 6,
+        j.forearmBack[1] + 14,
+        gloveR,
+        -mirror as 1 | -1,
+        squashX,
+        squashY,
+    );
+}
 
-    $: if (clip && clipTrigger && MORPH_DURATION_MS[clip]) {
-        const durationMs = MORPH_DURATION_MS[clip];
-        const rest = [1, 1] as const;
-        const squash: [number, number] = clip === "atk-uppercut" ? [0.85, 1.3] : [1.3, 0.85];
-        if (clip === "atk-cross" || clip === "atk-uppercut" || clip === "atk-hook") {
-            if (gloveBackEl && clip !== "atk-hook" && clip !== "atk-uppercut") {
-                morphPath(gloveBackEl, [
-                    backGloveD(...rest), backGloveD(...squash), backGloveD(...rest),
-                ], { durationMs });
-            }
-            if (gloveFrontEl && (clip === "atk-hook" || clip === "atk-uppercut")) {
-                morphPath(gloveFrontEl, [
-                    frontGloveD(...rest), frontGloveD(...squash), frontGloveD(...rest),
-                ], { durationMs });
-            }
-        } else if (clip === "hit-head-snap" || clip === "hit-gut-fold") {
-            // struck fighter: both gloves flinch-squash slightly, no thumb-side bias
-            if (gloveFrontEl) {
-                morphPath(gloveFrontEl, [frontGloveD(...rest), frontGloveD(0.9, 1.08), frontGloveD(...rest)], { durationMs });
-            }
-            if (gloveBackEl) {
-                morphPath(gloveBackEl, [backGloveD(...rest), backGloveD(0.9, 1.08), backGloveD(...rest)], { durationMs });
-            }
+$: if (clip && clipTrigger && MORPH_DURATION_MS[clip]) {
+    const durationMs = MORPH_DURATION_MS[clip];
+    const rest = [1, 1] as const;
+    const squash: [number, number] = clip === "atk-uppercut"
+        ? [0.85, 1.3]
+        : [1.3, 0.85];
+    if (
+        clip === "atk-cross" || clip === "atk-uppercut" || clip === "atk-hook"
+    ) {
+        if (gloveBackEl && clip !== "atk-hook" && clip !== "atk-uppercut") {
+            morphPath(gloveBackEl, [
+                backGloveD(...rest),
+                backGloveD(...squash),
+                backGloveD(...rest),
+            ], { durationMs });
+        }
+        if (gloveFrontEl && (clip === "atk-hook" || clip === "atk-uppercut")) {
+            morphPath(gloveFrontEl, [
+                frontGloveD(...rest),
+                frontGloveD(...squash),
+                frontGloveD(...rest),
+            ], { durationMs });
+        }
+    } else if (clip === "hit-head-snap" || clip === "hit-gut-fold") {
+        // struck fighter: both gloves flinch-squash slightly, no thumb-side bias
+        if (gloveFrontEl) {
+            morphPath(gloveFrontEl, [
+                frontGloveD(...rest),
+                frontGloveD(0.9, 1.08),
+                frontGloveD(...rest),
+            ], { durationMs });
+        }
+        if (gloveBackEl) {
+            morphPath(gloveBackEl, [
+                backGloveD(...rest),
+                backGloveD(0.9, 1.08),
+                backGloveD(...rest),
+            ], { durationMs });
         }
     }
+}
 ```
 
 - [ ] **Step 3: Add gradient/rim-light `<defs>` and switch gloves from `<circle>` to morph-ready `<path>`**
@@ -862,58 +999,58 @@ Note: because `{#key clipTrigger}` remounts the whole `<svg>` on every clip chan
 In the `<style>` block, delete these rules entirely (current lines 130-158) — they're superseded by the inline `fill:url(#{rid}-...)` styles added in Step 3:
 
 ```scss
-    .leg path,
-    .shin path {
-        fill: var(--trunks);
-    }
-    .arm path,
-    .forearm path,
-    .neck > path,
-    .torso {
-        fill: var(--skin);
-    }
-    .trunks {
-        fill: var(--trunks);
-    }
-    .head-shape {
-        fill: var(--skin);
-    }
-    .glove {
-        fill: var(--glove);
-    }
+.leg path,
+.shin path {
+    fill: var(--trunks);
+}
+.arm path,
+.forearm path,
+.neck > path,
+.torso {
+    fill: var(--skin);
+}
+.trunks {
+    fill: var(--trunks);
+}
+.head-shape {
+    fill: var(--skin);
+}
+.glove {
+    fill: var(--glove);
+}
 ```
 
 Add new rules for the AO shadow, rim light, and texture overlays:
 
 ```scss
-    .ao-shadow {
-        fill: #000;
-        opacity: 0.28;
-        filter: blur(2.5px);
-        pointer-events: none;
-    }
-    .rim-light {
-        fill: none;
-        stroke-width: 1.2;
-        stroke-linecap: round;
-        opacity: 0.55;
-    }
-    .texture-scale {
-        fill: rgb(0 0 0 / 18%);
-        stroke: none;
-    }
-    .texture-fur,
-    .texture-crack {
-        fill: none;
-        stroke: rgb(0 0 0 / 35%);
-        stroke-width: 1.2;
-        stroke-linecap: round;
-    }
-    .texture-warpaint {
-        fill: var(--accent);
-        opacity: 0.85;
-        stroke: none;
-    }
+.ao-shadow {
+    fill: #000;
+    opacity: 0.28;
+    filter: blur(2.5px);
+    pointer-events: none;
+}
+.rim-light {
+    fill: none;
+    stroke-width: 1.2;
+    stroke-linecap: round;
+    opacity: 0.55;
+}
+.texture-scale {
+    fill: rgb(0 0 0 / 18%);
+    stroke: none;
+}
+.texture-fur,
+.texture-crack {
+    fill: none;
+    stroke: rgb(0 0 0 / 35%);
+    stroke-width: 1.2;
+    stroke-linecap: round;
+}
+.texture-warpaint {
+    fill: var(--accent);
+    opacity: 0.85;
+    stroke: none;
+}
 ```
 
 - [ ] **Step 5: Update the dev gallery's species/builds sections don't need changes** — `SPECIES`, `bulk`, `facing`, `scale` props are unchanged; verify by reading `ts/routes/mcat/gallery/+page.svelte` — no edits needed there.
@@ -938,9 +1075,11 @@ git commit -m "feat(mcat): key-art gradients, AO/rim light, mitt gloves, morph w
 ### Task 6: FightRing — "Championship Arena" dressing
 
 **Files:**
+
 - Modify: `ts/routes/mcat/ring/FightRing.svelte`
 
 **Interfaces:**
+
 - Consumes: nothing new from earlier tasks (self-contained SVG dressing).
 - Produces: no prop/event changes. Keeps `mode/event/heroScale/heroBulkValue/opponent/marquee/showPips/height` exactly as-is, keeps the `sf-boxer-hidden` localStorage hide toggle, keeps the earlier-session accessibility fix (`aria-hidden` only on decorative children, not the `.sf-hide` button).
 
@@ -949,61 +1088,61 @@ git commit -m "feat(mcat): key-art gradients, AO/rim light, mitt gloves, morph w
 Modify `ts/routes/mcat/ring/FightRing.svelte`. Replace the four decorative `<div>`s (current lines 97-100: `.ropes`, `.floor`, `.post.l`, `.post.r`) with an inline SVG rendered behind the `.stage`:
 
 ```svelte
-    <div class="sf-ring" style="height:{height}px">
-        <svg class="dressing" viewBox="0 0 700 110" preserveAspectRatio="none" aria-hidden="true">
-            <defs>
-                <radialGradient id="sf-ring-spot" cx="50%" cy="-10%" r="95%">
-                    <stop offset="0" stop-color="#2e2216" />
-                    <stop offset="45%" stop-color="#15171d" />
-                    <stop offset="100%" stop-color="#08090c" />
-                </radialGradient>
-                <linearGradient id="sf-ring-floor" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0" stop-color="#20242f" />
-                    <stop offset="1" stop-color="#0a0c10" />
-                </linearGradient>
-                <linearGradient id="sf-ring-rope-red" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0" stop-color="#ff8a7a" />
-                    <stop offset="0.5" stop-color="#c81e2c" />
-                    <stop offset="1" stop-color="#6e0f16" />
-                </linearGradient>
-                <linearGradient id="sf-ring-rope-gold" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0" stop-color="#ffe9ad" />
-                    <stop offset="0.5" stop-color="#f5c451" />
-                    <stop offset="1" stop-color="#a3792b" />
-                </linearGradient>
-                <linearGradient id="sf-ring-post" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0" stop-color="#3a4358" />
-                    <stop offset="0.5" stop-color="#1c2230" />
-                    <stop offset="1" stop-color="#0c0f16" />
-                </linearGradient>
-                <filter id="sf-ring-glow"><feGaussianBlur stdDeviation="9" /></filter>
-            </defs>
-            <rect width="700" height="110" fill="url(#sf-ring-spot)" />
-            <g filter="url(#sf-ring-glow)" opacity="0.35">
-                <circle cx="90" cy="8" r="14" fill="#f5c451" />
-                <circle cx="240" cy="4" r="10" fill="#ff5d6c" />
-                <circle cx="470" cy="6" r="12" fill="#f5c451" />
-                <circle cx="620" cy="4" r="9" fill="#8fb6ff" />
-            </g>
-            <rect y="52" width="700" height="58" fill="url(#sf-ring-floor)" />
-            <circle cx="350" cy="82" r="20" fill="none" stroke="#f5c451" stroke-width="1.2" opacity="0.22" />
-            <text x="350" y="89" text-anchor="middle" font-family="Georgia, serif" font-size="18" fill="#f5c451" opacity="0.2" font-weight="700">S</text>
-            <g stroke="#232834" stroke-width="1" opacity="0.5">
-                <line x1="0" y1="62" x2="700" y2="62" />
-                <line x1="0" y1="74" x2="700" y2="74" />
-                <line x1="0" y1="86" x2="700" y2="86" />
-                <line x1="0" y1="98" x2="700" y2="98" />
-            </g>
-            <ellipse cx="350" cy="66" rx="260" ry="16" fill="#f5c451" opacity="0.09" />
-            <rect x="14" y="6" width="10" height="96" rx="4" fill="url(#sf-ring-post)" />
-            <rect x="676" y="6" width="10" height="96" rx="4" fill="url(#sf-ring-post)" />
-            <circle cx="19" cy="8" r="8" fill="url(#sf-ring-rope-gold)" />
-            <circle cx="681" cy="8" r="8" fill="url(#sf-ring-rope-gold)" />
-            <path d="M14,20 Q350,32 686,20" fill="none" stroke="url(#sf-ring-rope-gold)" stroke-width="6" stroke-linecap="round" />
-            <path d="M14,38 Q350,52 686,38" fill="none" stroke="url(#sf-ring-rope-red)" stroke-width="6" stroke-linecap="round" />
-            <path d="M14,56 Q350,70 686,56" fill="none" stroke="url(#sf-ring-rope-gold)" stroke-width="6" stroke-linecap="round" />
-        </svg>
-        <button class="sf-hide" on:click={toggle} title="Hide the ring">✕</button>
+<div class="sf-ring" style="height:{height}px">
+    <svg class="dressing" viewBox="0 0 700 110" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+            <radialGradient id="sf-ring-spot" cx="50%" cy="-10%" r="95%">
+                <stop offset="0" stop-color="#2e2216" />
+                <stop offset="45%" stop-color="#15171d" />
+                <stop offset="100%" stop-color="#08090c" />
+            </radialGradient>
+            <linearGradient id="sf-ring-floor" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#20242f" />
+                <stop offset="1" stop-color="#0a0c10" />
+            </linearGradient>
+            <linearGradient id="sf-ring-rope-red" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#ff8a7a" />
+                <stop offset="0.5" stop-color="#c81e2c" />
+                <stop offset="1" stop-color="#6e0f16" />
+            </linearGradient>
+            <linearGradient id="sf-ring-rope-gold" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#ffe9ad" />
+                <stop offset="0.5" stop-color="#f5c451" />
+                <stop offset="1" stop-color="#a3792b" />
+            </linearGradient>
+            <linearGradient id="sf-ring-post" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0" stop-color="#3a4358" />
+                <stop offset="0.5" stop-color="#1c2230" />
+                <stop offset="1" stop-color="#0c0f16" />
+            </linearGradient>
+            <filter id="sf-ring-glow"><feGaussianBlur stdDeviation="9" /></filter>
+        </defs>
+        <rect width="700" height="110" fill="url(#sf-ring-spot)" />
+        <g filter="url(#sf-ring-glow)" opacity="0.35">
+            <circle cx="90" cy="8" r="14" fill="#f5c451" />
+            <circle cx="240" cy="4" r="10" fill="#ff5d6c" />
+            <circle cx="470" cy="6" r="12" fill="#f5c451" />
+            <circle cx="620" cy="4" r="9" fill="#8fb6ff" />
+        </g>
+        <rect y="52" width="700" height="58" fill="url(#sf-ring-floor)" />
+        <circle cx="350" cy="82" r="20" fill="none" stroke="#f5c451" stroke-width="1.2" opacity="0.22" />
+        <text x="350" y="89" text-anchor="middle" font-family="Georgia, serif" font-size="18" fill="#f5c451" opacity="0.2" font-weight="700">S</text>
+        <g stroke="#232834" stroke-width="1" opacity="0.5">
+            <line x1="0" y1="62" x2="700" y2="62" />
+            <line x1="0" y1="74" x2="700" y2="74" />
+            <line x1="0" y1="86" x2="700" y2="86" />
+            <line x1="0" y1="98" x2="700" y2="98" />
+        </g>
+        <ellipse cx="350" cy="66" rx="260" ry="16" fill="#f5c451" opacity="0.09" />
+        <rect x="14" y="6" width="10" height="96" rx="4" fill="url(#sf-ring-post)" />
+        <rect x="676" y="6" width="10" height="96" rx="4" fill="url(#sf-ring-post)" />
+        <circle cx="19" cy="8" r="8" fill="url(#sf-ring-rope-gold)" />
+        <circle cx="681" cy="8" r="8" fill="url(#sf-ring-rope-gold)" />
+        <path d="M14,20 Q350,32 686,20" fill="none" stroke="url(#sf-ring-rope-gold)" stroke-width="6" stroke-linecap="round" />
+        <path d="M14,38 Q350,52 686,38" fill="none" stroke="url(#sf-ring-rope-red)" stroke-width="6" stroke-linecap="round" />
+        <path d="M14,56 Q350,70 686,56" fill="none" stroke="url(#sf-ring-rope-gold)" stroke-width="6" stroke-linecap="round" />
+    </svg>
+    <button class="sf-hide" on:click={toggle} title="Hide the ring">✕</button>
 ```
 
 The rest of the file (marquee, `.stage`, `FighterRig`/`HeavyBag`/`RingFx` children, closing tags) is unchanged — only the four decorative `<div>`s are replaced by the single `<svg class="dressing">` above, still followed by the (unchanged) `.sf-hide` button and marquee block.
@@ -1013,13 +1152,13 @@ The rest of the file (marquee, `.stage`, `FighterRig`/`HeavyBag`/`RingFx` childr
 In `<style lang="scss">`, remove the `.floor`, `.ropes`, `.post` rule blocks (they styled the deleted divs) and add:
 
 ```scss
-    .dressing {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        display: block;
-    }
+.dressing {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+}
 ```
 
 Keep `.sf-ring`'s own background/border/shadow rules as-is (the SVG's `<rect fill="url(#sf-ring-spot)">` sits on top of it, both are fine to keep layered).
@@ -1051,9 +1190,11 @@ git commit -m "feat(mcat): Championship Arena SVG ring dressing"
 ### Task 7: RingFx — layered impact burst, dust/sweat, broadcast-chyron badge
 
 **Files:**
+
 - Modify: `ts/routes/mcat/ring/RingFx.svelte`
 
 **Interfaces:**
+
 - Consumes: nothing new.
 - Produces: no prop changes — keeps `badge: {text, tone} | null`, `badgeTrigger`, `impact: {x,y} | null` exactly as today. `FightRing.svelte` and the gallery keep calling it identically.
 
@@ -1066,10 +1207,10 @@ git commit -m "feat(mcat): Championship Arena SVG ring dressing"
 Replace the badge `<div>` (currently `<div class="badge {badge.tone}">{badge.text}</div>`) with:
 
 ```svelte
-        <div class="chyron {badge.tone}">
-            <span class="chyron-bar"></span>
-            <span class="chyron-text">{badge.text}</span>
-        </div>
+<div class="chyron {badge.tone}">
+    <span class="chyron-bar"></span>
+    <span class="chyron-text">{badge.text}</span>
+</div>
 ```
 
 - [ ] **Step 3: Add a layered burst (replacing the thin 6-line star) plus dust puffs and sweat arcs**
@@ -1140,134 +1281,134 @@ Replace the `impact` block's `<svg class="star">` with a richer burst, and add n
 Replace the `.badge*`/`pop`/`popMid` rules with:
 
 ```scss
-    .chyron {
-        position: absolute;
-        top: 12%;
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
-        font-weight: 800;
-        font-style: italic;
-        font-size: 12px;
-        letter-spacing: 0.03em;
-        padding: 3px 10px 3px 6px;
-        clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
-        animation: chyron-in 0.65s ease-out 1 both;
-        &.gold {
-            background: linear-gradient(120deg, #ffe9ad, #f5c451 60%, #a3792b);
-            color: #3a2a00;
-            right: 22%;
-        }
-        &.steel {
-            background: linear-gradient(120deg, #aab2c0, #566073 60%, #333a47);
-            color: #0a0e16;
-            left: 50%;
-            transform: translateX(-50%);
-            animation-name: chyron-in-mid;
-        }
-        &.err {
-            background: linear-gradient(120deg, #ff9aa3, #ff5d6c 60%, #8c1019);
-            color: #2a0308;
-            left: 22%;
-        }
+.chyron {
+    position: absolute;
+    top: 12%;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-weight: 800;
+    font-style: italic;
+    font-size: 12px;
+    letter-spacing: 0.03em;
+    padding: 3px 10px 3px 6px;
+    clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+    animation: chyron-in 0.65s ease-out 1 both;
+    &.gold {
+        background: linear-gradient(120deg, #ffe9ad, #f5c451 60%, #a3792b);
+        color: #3a2a00;
+        right: 22%;
     }
-    .chyron-bar {
-        width: 3px;
-        align-self: stretch;
-        background: rgb(0 0 0 / 35%);
+    &.steel {
+        background: linear-gradient(120deg, #aab2c0, #566073 60%, #333a47);
+        color: #0a0e16;
+        left: 50%;
+        transform: translateX(-50%);
+        animation-name: chyron-in-mid;
     }
-    @keyframes chyron-in {
-        0% { transform: translateX(12px) scaleX(0.7); opacity: 0; }
-        30% { transform: translateX(0) scaleX(1.05); opacity: 1; }
-        100% { transform: translateX(0) scaleX(1); opacity: 0; }
+    &.err {
+        background: linear-gradient(120deg, #ff9aa3, #ff5d6c 60%, #8c1019);
+        color: #2a0308;
+        left: 22%;
     }
-    @keyframes chyron-in-mid {
-        0% { transform: translateX(-50%) translateY(6px); opacity: 0; }
-        30% { transform: translateX(-50%) translateY(0); opacity: 1; }
-        100% { transform: translateX(-50%) translateY(0); opacity: 0; }
-    }
+}
+.chyron-bar {
+    width: 3px;
+    align-self: stretch;
+    background: rgb(0 0 0 / 35%);
+}
+@keyframes chyron-in {
+    0% { transform: translateX(12px) scaleX(0.7); opacity: 0; }
+    30% { transform: translateX(0) scaleX(1.05); opacity: 1; }
+    100% { transform: translateX(0) scaleX(1); opacity: 0; }
+}
+@keyframes chyron-in-mid {
+    0% { transform: translateX(-50%) translateY(6px); opacity: 0; }
+    30% { transform: translateX(-50%) translateY(0); opacity: 1; }
+    100% { transform: translateX(-50%) translateY(0); opacity: 0; }
+}
 ```
 
 Replace the `.star`/`burst` keyframes with:
 
 ```scss
-    .burst {
-        position: absolute;
-        width: 34px;
-        height: 34px;
-        margin: -17px 0 0 -17px;
-        animation: burst-pop 0.24s ease-out 1 both;
-    }
-    .burst-flash {
-        fill: #fff;
-        opacity: 0.9;
-    }
-    .burst-shard {
-        fill: var(--sf-gold);
-        stroke: #05070c;
-        stroke-width: 1;
-    }
-    .burst-spoke {
-        stroke: var(--sf-gold);
-        stroke-width: 2;
-        stroke-linecap: round;
-    }
-    @keyframes burst-pop {
-        0% { transform: scale(0.3); opacity: 1; }
-        100% { transform: scale(1.2); opacity: 0; }
-    }
-    .dust {
-        position: absolute;
-        left: 50%;
-        bottom: 6%;
-        width: 40px;
-        height: 20px;
-        transform: translateX(-50%);
-        animation: dust-rise 0.5s ease-out 1 both;
-    }
-    .dust .mote {
-        fill: rgb(210 200 180 / 55%);
-    }
-    @keyframes dust-rise {
-        0% { transform: translateX(-50%) translateY(4px); opacity: 0; }
-        30% { opacity: 0.8; }
-        100% { transform: translateX(-50%) translateY(-10px); opacity: 0; }
-    }
-    .sweat {
-        position: absolute;
-        top: 20%;
-        left: 50%;
-        width: 40px;
-        height: 40px;
-        transform: translateX(-50%);
-        animation: sweat-fly 0.4s ease-out 1 both;
-    }
-    .sweat .drop {
-        fill: #bcd8ff;
-        opacity: 0.85;
-    }
-    @keyframes sweat-fly {
-        0% { transform: translateX(-50%) translateY(0) scale(0.6); opacity: 0; }
-        40% { opacity: 0.9; }
-        100% { transform: translateX(-50%) translateY(-14px) scale(1); opacity: 0; }
-    }
+.burst {
+    position: absolute;
+    width: 34px;
+    height: 34px;
+    margin: -17px 0 0 -17px;
+    animation: burst-pop 0.24s ease-out 1 both;
+}
+.burst-flash {
+    fill: #fff;
+    opacity: 0.9;
+}
+.burst-shard {
+    fill: var(--sf-gold);
+    stroke: #05070c;
+    stroke-width: 1;
+}
+.burst-spoke {
+    stroke: var(--sf-gold);
+    stroke-width: 2;
+    stroke-linecap: round;
+}
+@keyframes burst-pop {
+    0% { transform: scale(0.3); opacity: 1; }
+    100% { transform: scale(1.2); opacity: 0; }
+}
+.dust {
+    position: absolute;
+    left: 50%;
+    bottom: 6%;
+    width: 40px;
+    height: 20px;
+    transform: translateX(-50%);
+    animation: dust-rise 0.5s ease-out 1 both;
+}
+.dust .mote {
+    fill: rgb(210 200 180 / 55%);
+}
+@keyframes dust-rise {
+    0% { transform: translateX(-50%) translateY(4px); opacity: 0; }
+    30% { opacity: 0.8; }
+    100% { transform: translateX(-50%) translateY(-10px); opacity: 0; }
+}
+.sweat {
+    position: absolute;
+    top: 20%;
+    left: 50%;
+    width: 40px;
+    height: 40px;
+    transform: translateX(-50%);
+    animation: sweat-fly 0.4s ease-out 1 both;
+}
+.sweat .drop {
+    fill: #bcd8ff;
+    opacity: 0.85;
+}
+@keyframes sweat-fly {
+    0% { transform: translateX(-50%) translateY(0) scale(0.6); opacity: 0; }
+    40% { opacity: 0.9; }
+    100% { transform: translateX(-50%) translateY(-14px) scale(1); opacity: 0; }
+}
 ```
 
 Keep the existing `@media (prefers-reduced-motion: reduce)` block, extending its selector list to include the new classes:
 
 ```scss
-    @media (prefers-reduced-motion: reduce) {
-        .chyron {
-            animation: none;
-            opacity: 1;
-        }
-        .burst,
-        .dust,
-        .sweat {
-            display: none;
-        }
+@media (prefers-reduced-motion: reduce) {
+    .chyron {
+        animation: none;
+        opacity: 1;
     }
+    .burst,
+    .dust,
+    .sweat {
+        display: none;
+    }
+}
 ```
 
 - [ ] **Step 5: Wire `dust`/`sweat` from `FightRing.svelte`**
@@ -1275,14 +1416,14 @@ Keep the existing `@media (prefers-reduced-motion: reduce)` block, extending its
 In `ts/routes/mcat/ring/FightRing.svelte`, pass through the new optional props on the existing `<RingFx>` usage, driven off the same `lastTrigger`/`model` state already present — add to the `<RingFx>` call:
 
 ```svelte
-            <RingFx
-                badge={model.badge}
-                badgeTrigger={lastTrigger}
-                dust={model.shake >= 2}
-                dustTrigger={lastTrigger}
-                sweat={model.shake >= 1 && mode === "spar"}
-                sweatTrigger={lastTrigger}
-            />
+<RingFx
+    badge={model.badge}
+    badgeTrigger={lastTrigger}
+    dust={model.shake >= 2}
+    dustTrigger={lastTrigger}
+    sweat={model.shake >= 1 && mode === "spar"}
+    sweatTrigger={lastTrigger}
+/>
 ```
 
 - [ ] **Step 6: Type-check and lint**
@@ -1305,9 +1446,11 @@ git commit -m "feat(mcat): layered impact burst, dust/sweat FX, broadcast-chyron
 ### Task 8: HeavyBag — leather gradient + stitching
 
 **Files:**
+
 - Modify: `ts/routes/mcat/ring/HeavyBag.svelte`
 
 **Interfaces:**
+
 - Consumes: nothing new.
 - Produces: no prop changes — `swing`/`swingTrigger` unchanged.
 
@@ -1316,56 +1459,56 @@ git commit -m "feat(mcat): layered impact burst, dust/sweat FX, broadcast-chyron
 The gold top cap currently lives on `.bag::before`, sharing pseudo-element budget with the seam line on `.bag::after`. Give the cap its own real element so both `::before` and `::after` are free for two stitch seams instead. Replace the template's dressing block (currently `<div class="bag-strap"></div><div class="bag"></div>` inside `.bag-rig`) with:
 
 ```svelte
-        <div class="bag-strap"></div>
-        <div class="bag-cap"></div>
-        <div class="bag"></div>
+<div class="bag-strap"></div>
+<div class="bag-cap"></div>
+<div class="bag"></div>
 ```
 
 Replace the `.bag`, `.bag::before`, and `.bag::after` rules with:
 
 ```scss
-    .bag-cap {
-        position: absolute;
-        top: 12%;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 36px;
-        height: 8px;
-        border-radius: 4px;
-        background: linear-gradient(180deg, #ffe9ad, #f5c451 55%, #a3792b);
-        box-shadow: 0 0 0 1px #05070c;
-    }
-    .bag {
-        position: absolute;
-        top: 16%;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 32px;
-        height: 74%;
-        border-radius: 13px / 18px;
-        background:
-            linear-gradient(100deg, rgb(255 255 255 / 18%) 0%, transparent 30%),
-            linear-gradient(180deg, #d9542f 0%, #a8341c 45%, #6e1e10 100%);
-        border: 2px solid #05070c;
-        box-shadow:
-            inset -6px 0 0 rgba(0, 0, 0, 0.28),
-            inset 6px 0 0 rgba(255, 255, 255, 0.1);
-    }
-    .bag::before,
-    .bag::after {
-        content: "";
-        position: absolute;
-        left: 3px;
-        right: 3px;
-        height: 2px;
-        background: repeating-linear-gradient(90deg, rgb(0 0 0 / 45%) 0 3px, transparent 3px 6px);
-    }
-    .bag::before {
-        top: 40%;
-    }
-    .bag::after {
-        top: 62%;
-    }
+.bag-cap {
+    position: absolute;
+    top: 12%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 36px;
+    height: 8px;
+    border-radius: 4px;
+    background: linear-gradient(180deg, #ffe9ad, #f5c451 55%, #a3792b);
+    box-shadow: 0 0 0 1px #05070c;
+}
+.bag {
+    position: absolute;
+    top: 16%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 32px;
+    height: 74%;
+    border-radius: 13px / 18px;
+    background:
+        linear-gradient(100deg, rgb(255 255 255 / 18%) 0%, transparent 30%),
+        linear-gradient(180deg, #d9542f 0%, #a8341c 45%, #6e1e10 100%);
+    border: 2px solid #05070c;
+    box-shadow:
+        inset -6px 0 0 rgba(0, 0, 0, 0.28),
+        inset 6px 0 0 rgba(255, 255, 255, 0.1);
+}
+.bag::before,
+.bag::after {
+    content: "";
+    position: absolute;
+    left: 3px;
+    right: 3px;
+    height: 2px;
+    background: repeating-linear-gradient(90deg, rgb(0 0 0 / 45%) 0 3px, transparent 3px 6px);
+}
+.bag::before {
+    top: 40%;
+}
+.bag::after {
+    top: 62%;
+}
 ```
 
 - [ ] **Step 2: Type-check and lint**
@@ -1388,6 +1531,7 @@ git commit -m "feat(mcat): leather-gradient heavy bag with stitch seams and gold
 ### Task 9: Visual QA loop against the dev gallery
 
 **Files:**
+
 - Create (scratch, not committed): a temporary Playwright screenshot script.
 - Possibly modify: `ts/routes/mcat/ring/geometry.ts`, `ts/routes/mcat/ring/roster.ts` (coordinate tuning only, based on what the screenshots show).
 
@@ -1408,7 +1552,9 @@ import { chromium } from "@playwright/test";
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1400, height: 1600 } });
-await page.goto("http://127.0.0.1:5183/mcat/gallery", { waitUntil: "networkidle" });
+await page.goto("http://127.0.0.1:5183/mcat/gallery", {
+    waitUntil: "networkidle",
+});
 await page.screenshot({ path: "out/gallery-full.png", fullPage: true });
 
 // Species row close-up
@@ -1416,11 +1562,21 @@ const speciesRow = page.locator("section:has(h2:text('Species')) .row");
 await speciesRow.screenshot({ path: "out/gallery-species.png" });
 
 // Play each of the 5 morph-wired clips and screenshot mid-animation
-for (const clipId of ["atk-cross", "atk-uppercut", "atk-hook", "hit-head-snap", "hit-gut-fold"]) {
+for (
+    const clipId of [
+        "atk-cross",
+        "atk-uppercut",
+        "atk-hook",
+        "hit-head-snap",
+        "hit-gut-fold",
+    ]
+) {
     await page.selectOption("select", clipId);
     await page.click("button:text('Play')");
     await page.waitForTimeout(250); // land mid-animation, near the contact frame
-    await page.locator(".stage").first().screenshot({ path: `out/gallery-clip-${clipId}.png` });
+    await page.locator(".stage").first().screenshot({
+        path: `out/gallery-clip-${clipId}.png`,
+    });
     await page.waitForTimeout(500); // let it finish before the next one
 }
 

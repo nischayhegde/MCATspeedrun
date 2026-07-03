@@ -36,8 +36,8 @@ follow-through → settle — so a 100ms freeze delivers more impact than any
 amount of continuous wiggle. Difficulty becomes legible fiction: real
 authored+FSRS difficulty picks the opponent's species and mass, so "this is a
 hard question" is communicated by a minotaur's silhouette instead of a number.
-The metaphor is load-bearing: flashcards are *training* (gym, bag, jump rope),
-MCQs are *fights* (opponent in the ring), the diagnostic is *fight camp*
+The metaphor is load-bearing: flashcards are _training_ (gym, bag, jump rope),
+MCQs are _fights_ (opponent in the ring), the diagnostic is _fight camp_
 (heavy bag, no scoring leaks) — mirroring the app's fluency-gate → application
 model.
 
@@ -102,8 +102,8 @@ Emphasize the score, the three weakest topics, one primary action; quieten
 machinery and jargon.
 
 1. Scorecard header keeps the SCORECARD label and corner-bar signature. The
-   coverage/depth/freshness triple collapses to one sentence — *"Estimate is
-   rough — you've assessed 41% of the blueprint."* — with a `details`
+   coverage/depth/freshness triple collapses to one sentence — _"Estimate is
+   rough — you've assessed 41% of the blueprint."_ — with a `details`
    disclosure ("How is this computed?") revealing the three bars. `±7 pts`
    stays; `62% confidence` goes.
 2. Actions: `Study now` (primary red gradient) and `Take diagnostic`
@@ -114,7 +114,7 @@ machinery and jargon.
    shimmer instead of blocking.) `Reset progress` moves into a `⋯` overflow
    menu at the header's top-right. Destructive red leaves the hero panel.
 3. New signature: **"NEXT OPPONENTS"** row under the scorecard — the three
-   weakest *assessed* leaves rendered as tale-of-the-tape fight cards: a
+   weakest _assessed_ leaves rendered as tale-of-the-tape fight cards: a
    static `FighterRig` portrait (pose `guard`, ~64px) of the species that
    leaf's weakness maps to (`tierFromMastery(1 − fluency·0.6 −
    application·0.4)`), leaf name, fluency/application micro-bars, and a
@@ -146,7 +146,7 @@ Column order (fixes "decoration above orientation"):
 - **Constant-height ring strip (~100px).** No height animation on answer
   (the panel's "dock pump" idea is rejected per judge consensus — layout
   shift while reading the explanation). Spotlight moments happen via
-  lighting/FX *within* the fixed strip.
+  lighting/FX _within_ the fixed strip.
 - Timer (new): dim `m:ss` (12px, opacity .55, tabular-nums) beside the
   counter, plus a 6px gold **pace diamond** at the 15s-equivalent position on
   the progress track that fades to steel when `FAST_MS` passes. Click to hide
@@ -183,8 +183,8 @@ Column order (fixes "decoration above orientation"):
   locks and advances. A dim "press again to lock in" hint appears on first
   selection, first 3 questions only. Study keeps single-tap (highest-volume
   interaction; feedback is immediate and stakes are per-card).
-- Finish early gets a confirm dialog: *"Submit now? 37 answered · 63
-  unanswered."* with `Keep going` autofocused.
+- Finish early gets a confirm dialog: _"Submit now? 37 answered · 63
+  unanswered."_ with `Keep going` autofocused.
 - Results hierarchy: headline is the diagnostic's own result — **"31 / 59
   correct (53%)"** in the 44px gold-gradient treatment — then the readiness
   **delta**: `Readiness: 498 → 506 (+8) / 528 (±7)` (fetch
@@ -242,10 +242,10 @@ ts/routes/mcat/ring/
 
 ```ts
 export let mode: "spar" | "train" | "bag" = "spar"; // spar=MCQ, train=flashcards, bag=diagnostic
-export let event: FightEvent | null = null;         // {kind, trigger}
-export let heroScale = 1;                           // readiness formula, unchanged
+export let event: FightEvent | null = null; // {kind, trigger}
+export let heroScale = 1; // readiness formula, unchanged
 export let opponent: OpponentInstance | null = null; // from opponentFor(item)
-export let marquee = "";                            // "1B · Enzymes ●●●●○ vs BULLHORN · TIER 5"
+export let marquee = ""; // "1B · Enzymes ●●●●○ vs BULLHORN · TIER 5"
 ```
 
 No `{#key trigger}` re-mounting of the whole scene (today's flicker bug). The
@@ -318,32 +318,61 @@ nodes).
 ### 4.3 Data model (`roster.ts`)
 
 ```ts
-export type Species = "rookie" | "sidewinder" | "hobnail" | "howler" | "gravel"
-                    | "bullhorn" | "chiron";
+export type Species =
+    | "rookie"
+    | "sidewinder"
+    | "hobnail"
+    | "howler"
+    | "gravel"
+    | "bullhorn"
+    | "chiron";
 export type Build = "lean" | "fit" | "heavy" | "colossal";
 export type Chassis = "biped" | "taur";
 export type Tier = 1 | 2 | 3 | 4 | 5 | 6;
 
 export interface SpeciesSpec {
-    id: Species; name: string; chassis: Chassis; build: Build;
-    headPath: string; extraPaths: string[];
-    palettes: Palette[];          // 2–3 recolors per species
-    signatures: ClipName[];       // species-only attacks/taunts
-    taunts: ClipName[]; hitSfx: string;   // "THUD!" for bullhorn…
-    amp: number; wt: number;      // physics multipliers
+    id: Species;
+    name: string;
+    chassis: Chassis;
+    build: Build;
+    headPath: string;
+    extraPaths: string[];
+    palettes: Palette[]; // 2–3 recolors per species
+    signatures: ClipName[]; // species-only attacks/taunts
+    taunts: ClipName[];
+    hitSfx: string; // "THUD!" for bullhorn…
+    amp: number;
+    wt: number; // physics multipliers
     reactOverrides?: Partial<Record<ClipName, ClipName>>;
 }
 export interface OpponentInstance {
-    species: SpeciesSpec; tier: Tier; scale: number; bulk: number;
+    species: SpeciesSpec;
+    tier: Tier;
+    scale: number;
+    bulk: number;
     paletteIndex: number;
 }
 export type FightEventKind =
-    | "fast-correct" | "slow-correct" | "wrong" | "idk"
-    | "streak-3" | "streak-5"
-    | "rate-again" | "rate-hard" | "rate-good" | "rate-easy"
-    | "reveal" | "bag-hit"
-    | "results-win" | "results-draw" | "results-loss" | "entrance";
-export interface FightEvent { kind: FightEventKind; trigger: number; }
+    | "fast-correct"
+    | "slow-correct"
+    | "wrong"
+    | "idk"
+    | "streak-3"
+    | "streak-5"
+    | "rate-again"
+    | "rate-hard"
+    | "rate-good"
+    | "rate-easy"
+    | "reveal"
+    | "bag-hit"
+    | "results-win"
+    | "results-draw"
+    | "results-loss"
+    | "entrance";
+export interface FightEvent {
+    kind: FightEventKind;
+    trigger: number;
+}
 ```
 
 - `opponentFor(item)` replaces `oppScaleFor` at both call sites; the
@@ -368,17 +397,17 @@ tier = clamp(base + mod, 1, 6)
 ```
 
 Tier 6 is only reachable as authored-5 AND personally brutal (FSRS ≥ 7.5) —
-the centaur is *your personal nightmare question*.
+the centaur is _your personal nightmare question_.
 
-| Tier | Name (marquee) | Species | Build / chassis | Scale | Silhouette (10-ft test) | Palette accent | Signature moves |
-|---|---|---|---|---|---|---|---|
-| 1 | ROOKIE | human featherweight | lean, upright, headgear | 0.90 | narrow column, headgear dome | slate `#3d4657` | `flail-jab`, `gulp` taunt |
-| 2 | SIDEWINDER | lizardfolk welterweight | fit | 0.98 | head crest fin + tail curve | desat teal `#2e4a4a` | `tail-sweep-feint`, `tongue-flick` |
-| 3 | HOBNAIL | hobgoblin bruiser | heavy, hunched | 1.06 | arms below knees, ear points | olive gunmetal `#3a4030` | `haymaker-windmill`, `knuckle-crack` |
-| 4a | HOWLER | werewolf | fit-heavy, digitigrade | 1.14 | muzzle + ears + fur spikes | charcoal `#2b2f38` + `--fur #4a4f5c` | `lunge-claw`, `howl` taunt |
-| 4b | GRAVEL | stone golem | colossal, slab shoulders | 1.18 | rectangular mass, no neck, crack seams | basalt `#33363d` + ember seams `#a3121c` | `boulder-slam`, `chest-pound` |
-| 5 | BULLHORN | **minotaur** | colossal | 1.28 | wide horn span, shoulder hump, snout, hooves | near-black hide + brass horn caps `#8a6d2f` | `horn-rake`, `steam-snort` taunt |
-| 6 | CHIRON, WARLORD | **centaur** | colossal, taur chassis | 1.35 | the only quadruped | dark bay + war paint `--sf-red-deep` | `rear-up` entrance, `overrun` |
+| Tier | Name (marquee)  | Species                 | Build / chassis          | Scale | Silhouette (10-ft test)                      | Palette accent                              | Signature moves                      |
+| ---- | --------------- | ----------------------- | ------------------------ | ----- | -------------------------------------------- | ------------------------------------------- | ------------------------------------ |
+| 1    | ROOKIE          | human featherweight     | lean, upright, headgear  | 0.90  | narrow column, headgear dome                 | slate `#3d4657`                             | `flail-jab`, `gulp` taunt            |
+| 2    | SIDEWINDER      | lizardfolk welterweight | fit                      | 0.98  | head crest fin + tail curve                  | desat teal `#2e4a4a`                        | `tail-sweep-feint`, `tongue-flick`   |
+| 3    | HOBNAIL         | hobgoblin bruiser       | heavy, hunched           | 1.06  | arms below knees, ear points                 | olive gunmetal `#3a4030`                    | `haymaker-windmill`, `knuckle-crack` |
+| 4a   | HOWLER          | werewolf                | fit-heavy, digitigrade   | 1.14  | muzzle + ears + fur spikes                   | charcoal `#2b2f38` + `--fur #4a4f5c`        | `lunge-claw`, `howl` taunt           |
+| 4b   | GRAVEL          | stone golem             | colossal, slab shoulders | 1.18  | rectangular mass, no neck, crack seams       | basalt `#33363d` + ember seams `#a3121c`    | `boulder-slam`, `chest-pound`        |
+| 5    | BULLHORN        | **minotaur**            | colossal                 | 1.28  | wide horn span, shoulder hump, snout, hooves | near-black hide + brass horn caps `#8a6d2f` | `horn-rake`, `steam-snort` taunt     |
+| 6    | CHIRON, WARLORD | **centaur**             | colossal, taur chassis   | 1.35  | the only quadruped                           | dark bay + war paint `--sf-red-deep`        | `rear-up` entrance, `overrun`        |
 
 Tier 4 alternates Howler/Gravel by cardId parity. Each species ships 2–3
 palette variants hashed from cardId.
@@ -456,16 +485,16 @@ landings; 3 sweat arcs on hit-reacts.
 
 ### 6.4 Event → animation contract
 
-| Study event | Hero | Opponent | FX / badge | Budget |
-|---|---|---|---|---|
-| fast-correct (≤15s) | ShuffleBag(power) | matched hit-react (uppercut→head-snap, body→gut-fold, cross/hook→stagger-ropes) | star, medium shake, `POW!/BAM!/WHAM!/BOOM!` | ≤900ms |
-| slow-correct | ShuffleBag(counter) | `hit-head-snap` or `block`→flinch | small star, light shake, `POINT!` gold-outline | ≤900ms |
-| wrong | ShuffleBag(hero-hit) | telegraph 220ms → species attack (signature 40% / core 60%) | red flash on hero, `OOF!`, taunt 35% *after* exchange | ≤1100ms |
-| IDK | `def-step-back`/`def-tape-study` | `taunt-respect-nod` | `GOOD CALL` steel/gold | ≤800ms |
-| streak-3 / streak-5 | `combo-one-two` / `combo-blitz` | stagger / `ko-knee`+`getup` | `ON A ROLL!` / `KNOCKDOWN!` | ≤1.1s |
-| flashcard rate 1–4 | train mappings | — (bag) | tiny badge in status color | ≤700ms |
-| diagnostic answer | ShuffleBag(bag), flurry every 10th | — | uniform for all answers — zero leak | ≤900ms |
-| results | win/draw/loss by diagnostic pct (≥60 / 40–59 / <40) | crumple / glove-touch / — | one flourish, once | ≤1.3s |
+| Study event         | Hero                                                | Opponent                                                                        | FX / badge                                            | Budget  |
+| ------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------- | ------- |
+| fast-correct (≤15s) | ShuffleBag(power)                                   | matched hit-react (uppercut→head-snap, body→gut-fold, cross/hook→stagger-ropes) | star, medium shake, `POW!/BAM!/WHAM!/BOOM!`           | ≤900ms  |
+| slow-correct        | ShuffleBag(counter)                                 | `hit-head-snap` or `block`→flinch                                               | small star, light shake, `POINT!` gold-outline        | ≤900ms  |
+| wrong               | ShuffleBag(hero-hit)                                | telegraph 220ms → species attack (signature 40% / core 60%)                     | red flash on hero, `OOF!`, taunt 35% _after_ exchange | ≤1100ms |
+| IDK                 | `def-step-back`/`def-tape-study`                    | `taunt-respect-nod`                                                             | `GOOD CALL` steel/gold                                | ≤800ms  |
+| streak-3 / streak-5 | `combo-one-two` / `combo-blitz`                     | stagger / `ko-knee`+`getup`                                                     | `ON A ROLL!` / `KNOCKDOWN!`                           | ≤1.1s   |
+| flashcard rate 1–4  | train mappings                                      | — (bag)                                                                         | tiny badge in status color                            | ≤700ms  |
+| diagnostic answer   | ShuffleBag(bag), flurry every 10th                  | —                                                                               | uniform for all answers — zero leak                   | ≤900ms  |
+| results             | win/draw/loss by diagnostic pct (≥60 / 40–59 / <40) | crumple / glove-touch / —                                                       | one flourish, once                                    | ≤1.3s   |
 
 Wrong-answer exchanges are sequenced by the reducer (telegraph → strike →
 hero hit at contact +180ms → badge +180ms), fully cancellable. Feedback text
@@ -478,15 +507,15 @@ loading screen.
    545), after `string explanation = 12;`:
 
 ```proto
-  // Authored difficulty from the mcat::diff::N tag, 1-5. 3 when untagged
-  // (see difficulty_tagged).
-  uint32 difficulty = 13;
-  // FSRS memory-state difficulty, raw 1.0-10.0. 0.0 = no memory state yet
-  // (new/reset card); consumers must fall back to `difficulty`.
-  float fsrs_difficulty = 14;
-  // True when the note actually carries an mcat::diff/difficulty tag, so
-  // the frontend can distinguish "authored medium" from "untagged".
-  bool difficulty_tagged = 15;
+// Authored difficulty from the mcat::diff::N tag, 1-5. 3 when untagged
+// (see difficulty_tagged).
+uint32 difficulty = 13;
+// FSRS memory-state difficulty, raw 1.0-10.0. 0.0 = no memory state yet
+// (new/reset card); consumers must fall back to `difficulty`.
+float fsrs_difficulty = 14;
+// True when the note actually carries an mcat::diff/difficulty tag, so
+// the frontend can distinguish "authored medium" from "untagged".
+bool difficulty_tagged = 15;
 ```
 
 2. **rslib** — `rslib/src/mcat/adapter.rs`, in `build_study_item()` (note
@@ -502,10 +531,10 @@ item.fsrs_difficulty = self.storage.get_card(CardId(card_id))?
     .unwrap_or(0.0);
 ```
 
-   One extra `get_card` read per item (negligible). Both study queue
-   (adapter.rs:367) and diagnostic (adapter.rs:497) flow through
-   `build_study_item`. Extend the `difficulty_parsed_from_tags` test (:652)
-   for the tagged/untagged flag.
+One extra `get_card` read per item (negligible). Both study queue
+(adapter.rs:367) and diagnostic (adapter.rs:497) flow through
+`build_study_item`. Extend the `difficulty_parsed_from_tags` test (:652)
+for the tagged/untagged flag.
 
 3. **Regeneration:** `just check` after the proto edit regenerates
    `anki_proto` + `out/ts/lib/generated/anki/scheduler_pb.d.ts`. Fields

@@ -41,10 +41,12 @@
 ### Task 1: Verdict model + grade mapping (pure Rust)
 
 **Files:**
+
 - Create: `rslib/src/mcat/grader.rs`
 - Modify: `rslib/src/mcat/mod.rs` (add `pub mod grader;` in alphabetical order with the other `pub mod` lines)
 
 **Interfaces:**
+
 - Produces: `Verdict` (`Incorrect`/`Partial`/`Correct`), `typed_latency() -> Latency`, `grade_typed(Verdict, u32) -> Grade`, `GradedAnswer { verdict: Verdict, feedback: String, model: String }`, `gave_up_result() -> GradedAnswer`, `verdict_str(Verdict) -> &'static str`. Tasks 3, 4, 5 consume these.
 
 - [ ] **Step 1: Create `rslib/src/mcat/grader.rs` with types + failing-to-exist tests**
@@ -162,6 +164,7 @@ mod tests {
 $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
 cargo test -p anki mcat::grader
 ```
+
 Expected: 3 passed.
 
 - [ ] **Step 4: Commit**
@@ -176,10 +179,12 @@ git commit -m "feat(mcat): verdict model + typed-answer grade mapping"
 ### Task 2: `mcat_answer_log` storage
 
 **Files:**
+
 - Modify: `rslib/src/storage/mcat/create.sql`
 - Modify: `rslib/src/storage/mcat/mod.rs`
 
 **Interfaces:**
+
 - Produces: `SqliteStorage::add_mcat_answer_log(revlog_id: i64, card_id: i64, verdict: &str, typed_answer: &str, feedback: &str, model: &str) -> Result<()>`, `SqliteStorage::mcat_answer_log_ids_for_card(card_id: i64) -> Result<HashSet<i64>>`, `SqliteStorage::clear_mcat_answer_log() -> Result<()>`. Tasks 3 and 5 consume these.
 - Consumes: existing `create_mcat_tables` (already called from `sqlite.rs` `open_or_create` — the new table rides the same `execute_batch`, no new hook needed).
 
@@ -296,6 +301,7 @@ mod tests {
 ```powershell
 cargo test -p anki mcat::answer_log
 ```
+
 Expected: `answer_log_roundtrip` passes (the `storage::mcat::tests` filter also works: `cargo test -p anki storage::mcat`).
 
 - [ ] **Step 4: Commit**
@@ -310,11 +316,13 @@ git commit -m "feat(mcat): mcat_answer_log table for verdict-backed reviews"
 ### Task 3: Objective evidence in the scoring layer
 
 **Files:**
+
 - Modify: `rslib/src/mcat/model.rs` (Review field + const)
 - Modify: `rslib/src/mcat/aggregate.rs` (spaced_correct weighting + tests)
 - Modify: `rslib/src/mcat/adapter.rs` (`build_card_reviews` signature, `mcat_leaf_inputs`, `mcat_reset_progress`)
 
 **Interfaces:**
+
 - Consumes: Task 1 `typed_latency()`; Task 2 `mcat_answer_log_ids_for_card`, `clear_mcat_answer_log`.
 - Produces: `Review.objective: bool`; `SELF_GRADED_EVIDENCE_WEIGHT: f32 = 0.5` in `model.rs`. `build_card_reviews(entries, kind, is_app, cars, latency, objective_ids: &HashSet<i64>)`.
 
@@ -323,9 +331,9 @@ git commit -m "feat(mcat): mcat_answer_log table for verdict-backed reviews"
 In `struct Review`, after the `latency` field:
 
 ```rust
-    /// Correctness is verdict-backed (LLM-graded typed answer, or an
-    /// auto-graded MCQ) rather than a self-pressed grade button.
-    pub objective: bool,
+/// Correctness is verdict-backed (LLM-graded typed answer, or an
+/// auto-graded MCQ) rather than a self-pressed grade button.
+pub objective: bool,
 ```
 
 With the other calibration constants (after `SPACED_CORRECT_TARGET`):
@@ -340,27 +348,27 @@ pub const SELF_GRADED_EVIDENCE_WEIGHT: f32 = 0.5; // discount for self-graded co
 In `rslib/src/mcat/aggregate.rs` tests: first make the two helpers construct objective reviews (the new normal). In `rote_review` and `app_review`, add `objective: true,` to the `Review { ... }` literal (next to `productive_failure`). Then add:
 
 ```rust
-    #[test]
-    fn self_graded_evidence_is_discounted_for_the_gate() {
-        // the same spaced fast-correct history that opens the gate when
-        // verdict-backed (see massed_cramming test) is only half evidence
-        // when it came from self-pressed grade buttons
-        let l = leaf("1A").unwrap();
-        let rote_mem = vec![RoteMemory {
-            retrievability_now: 0.95,
-            reps: 5,
-        }];
-        let mut self_rated = vec![
-            rote_review(20, true, 3_000, false),
-            rote_review(10, true, 3_000, false),
-            rote_review(5, true, 3_000, false),
-        ];
-        for r in &mut self_rated {
-            r.objective = false;
-        }
-        let s = score_leaf(&l, &self_rated, &rote_mem, NOW);
-        assert!(!s.gate_open, "self-graded clicks alone opened the fluency gate");
+#[test]
+fn self_graded_evidence_is_discounted_for_the_gate() {
+    // the same spaced fast-correct history that opens the gate when
+    // verdict-backed (see massed_cramming test) is only half evidence
+    // when it came from self-pressed grade buttons
+    let l = leaf("1A").unwrap();
+    let rote_mem = vec![RoteMemory {
+        retrievability_now: 0.95,
+        reps: 5,
+    }];
+    let mut self_rated = vec![
+        rote_review(20, true, 3_000, false),
+        rote_review(10, true, 3_000, false),
+        rote_review(5, true, 3_000, false),
+    ];
+    for r in &mut self_rated {
+        r.objective = false;
     }
+    let s = score_leaf(&l, &self_rated, &rote_mem, NOW);
+    assert!(!s.gate_open, "self-graded clicks alone opened the fluency gate");
+}
 ```
 
 - [ ] **Step 3: Run to verify it fails**
@@ -368,6 +376,7 @@ In `rslib/src/mcat/aggregate.rs` tests: first make the two helpers construct obj
 ```powershell
 cargo test -p anki mcat::aggregate
 ```
+
 Expected: FAIL — `self_graded_evidence_is_discounted_for_the_gate` panics ("self-graded clicks alone opened the fluency gate") because spaced_correct still counts them fully. (If it fails to compile first, that's the missing-field errors — fix the two helpers per Step 2, not the production code.)
 
 - [ ] **Step 4: Implement the discount in `aggregate.rs`**
@@ -375,21 +384,21 @@ Expected: FAIL — `self_graded_evidence_is_discounted_for_the_gate` panics ("se
 Replace the `spaced_correct` computation in `score_leaf`:
 
 ```rust
-    // effective spaced-correct: sum of spacing weights over correct recalls.
-    // Verdict-backed (objective) recalls count fully; legacy self-graded ones
-    // are discounted — an "Easy" click is weak evidence (PRD: Hendrick).
-    let spaced_correct: f32 = rote_reviews
-        .iter()
-        .zip(&rote_spacing)
-        .filter(|(r, _)| r.correct)
-        .map(|(r, &w)| {
-            w * if r.objective {
-                1.0
-            } else {
-                SELF_GRADED_EVIDENCE_WEIGHT
-            }
-        })
-        .sum();
+// effective spaced-correct: sum of spacing weights over correct recalls.
+// Verdict-backed (objective) recalls count fully; legacy self-graded ones
+// are discounted — an "Easy" click is weak evidence (PRD: Hendrick).
+let spaced_correct: f32 = rote_reviews
+    .iter()
+    .zip(&rote_spacing)
+    .filter(|(r, _)| r.correct)
+    .map(|(r, &w)| {
+        w * if r.objective {
+            1.0
+        } else {
+            SELF_GRADED_EVIDENCE_WEIGHT
+        }
+    })
+    .sum();
 ```
 
 - [ ] **Step 5: Wire objectivity through the adapter**
@@ -414,15 +423,15 @@ fn build_card_reviews(
 and inside the loop, just before `out.push(...)`:
 
 ```rust
-        // MCQ answers are always auto-graded; a flashcard row is objective
-        // when a verdict-backed answer-log entry points at it. Typed answers
-        // are judged against the wider typed-mode thresholds.
-        let objective = is_app || objective_ids.contains(&ts);
-        let latency = if !is_app && objective_ids.contains(&ts) {
-            super::grader::typed_latency()
-        } else {
-            latency
-        };
+// MCQ answers are always auto-graded; a flashcard row is objective
+// when a verdict-backed answer-log entry points at it. Typed answers
+// are judged against the wider typed-mode thresholds.
+let objective = is_app || objective_ids.contains(&ts);
+let latency = if !is_app && objective_ids.contains(&ts) {
+    super::grader::typed_latency()
+} else {
+    latency
+};
 ```
 
 and add `objective,` to the `Review { ... }` literal.
@@ -430,20 +439,20 @@ and add `objective,` to the `Review { ... }` literal.
 c. In `mcat_leaf_inputs`, fetch the ids and pass them:
 
 ```rust
-            let entries = self.storage.get_revlog_entries_for_card(cid)?;
-            let objective_ids = self.storage.mcat_answer_log_ids_for_card(cid.0)?;
-            let card_reviews =
-                build_card_reviews(&entries, kind, is_app, cars, latency, &objective_ids);
+let entries = self.storage.get_revlog_entries_for_card(cid)?;
+let objective_ids = self.storage.mcat_answer_log_ids_for_card(cid.0)?;
+let card_reviews =
+    build_card_reviews(&entries, kind, is_app, cars, latency, &objective_ids);
 ```
 
 d. In `mcat_reset_progress`, clear the log alongside the revlog:
 
 ```rust
-        self.transact_no_undo(|col| {
-            col.storage.clear_revlog_for_cards(&ids)?;
-            col.storage.clear_mcat_answer_log()?;
-            col.storage.clear_mcat_leaf_states()
-        })?;
+self.transact_no_undo(|col| {
+    col.storage.clear_revlog_for_cards(&ids)?;
+    col.storage.clear_mcat_answer_log()?;
+    col.storage.clear_mcat_leaf_states()
+})?;
 ```
 
 - [ ] **Step 6: Run the full mcat test module**
@@ -451,6 +460,7 @@ d. In `mcat_reset_progress`, clear the log alongside the revlog:
 ```powershell
 cargo test -p anki mcat
 ```
+
 Expected: all pass, including the pre-existing `massed_cramming_does_not_open_gate_but_spaced_recalls_do` (its spaced recalls are now objective via the helper) and the new discount test.
 
 - [ ] **Step 7: Commit**
@@ -465,9 +475,11 @@ git commit -m "feat(mcat): verdict-backed reviews count as objective gate eviden
 ### Task 4: OpenAI grader client
 
 **Files:**
+
 - Modify: `rslib/src/mcat/grader.rs`
 
 **Interfaces:**
+
 - Produces: `trait AnswerGrader { fn grade_answer(&self, term: &str, expected: &str, typed: &str) -> Result<GradedAnswer>; }` and `OpenAiGrader::new(client: reqwest::Client, runtime: tokio::runtime::Handle) -> OpenAiGrader`. Task 5 consumes both.
 - Consumes: `Backend::web_client()` / `Backend::runtime_handle()` (existing, `rslib/src/backend/mod.rs:129,175`).
 
@@ -516,6 +528,7 @@ Append to the `tests` module in `grader.rs`:
 ```powershell
 cargo test -p anki mcat::grader
 ```
+
 Expected: compile FAIL — `request_body` / `parse_response` not found.
 
 - [ ] **Step 3: Implement the client**
@@ -753,11 +766,13 @@ fn network_error(info: String) -> AnkiError {
 ```powershell
 cargo test -p anki mcat::grader
 ```
+
 Expected: 6 passed, 1 ignored. Then run the live smoke once (needs network + key):
 
 ```powershell
 cargo test -p anki grader -- --ignored --nocapture
 ```
+
 Expected: `live_grading_smoke ... ok`. If it fails with an HTTP 400 mentioning `reasoning_effort` or `response_format`, adjust `request_body` for the actual model family and re-run (document what changed in the commit message).
 
 - [ ] **Step 6: Commit**
@@ -772,11 +787,13 @@ git commit -m "feat(mcat): OpenAI structured-output grader with retry policy"
 ### Task 5: Proto RPC + backend service + answer path
 
 **Files:**
+
 - Modify: `proto/anki/scheduler.proto`
 - Modify: `rslib/src/mcat/adapter.rs`
 - Modify: `rslib/src/scheduler/service/mod.rs`
 
 **Interfaces:**
+
 - Consumes: Task 1 (`grade_typed`, `gave_up_result`, `verdict_str`, `GradedAnswer`, `Verdict`), Task 2 (`add_mcat_answer_log`), Task 4 (`OpenAiGrader`, `AnswerGrader`), `Backend::{with_col, web_client, runtime_handle}`.
 - Produces: RPC `AnswerMcatCardTyped(AnswerMcatCardTypedRequest) -> AnswerMcatCardTypedResponse`; `Collection::mcat_flashcard_fields(CardId) -> Result<(String, String)>`; `Collection::mcat_answer_card_typed(CardId, u32, &GradedAnswer, &str) -> Result<Grade>`. Tasks 6-7 consume the RPC.
 
@@ -811,12 +828,12 @@ message AnswerMcatCardTypedResponse {
 - [ ] **Step 2: Proto RPC** — add to `service BackendSchedulerService` (NOT `SchedulerService`; the backend has the tokio runtime and must not hold the collection lock during HTTP), after `ExportDataset`:
 
 ```proto
-  // Grade a typed MCAT flashcard answer with the LLM, then answer the card:
-  // one atomic step from the client's perspective. Blocks until grading
-  // succeeds or retries are exhausted; on failure the card is left
-  // unanswered so the client can retry the same submission.
-  rpc AnswerMcatCardTyped(AnswerMcatCardTypedRequest)
-      returns (AnswerMcatCardTypedResponse);
+// Grade a typed MCAT flashcard answer with the LLM, then answer the card:
+// one atomic step from the client's perspective. Blocks until grading
+// succeeds or retries are exhausted; on failure the card is left
+// unanswered so the client can retry the same submission.
+rpc AnswerMcatCardTyped(AnswerMcatCardTypedRequest)
+    returns (AnswerMcatCardTypedResponse);
 ```
 
 - [ ] **Step 3: Adapter — extract the shared answer helper.** In `rslib/src/mcat/adapter.rs`, add this free function (near `media_url`), then rewrite `mcat_answer_card`'s `transact` block to use it:
@@ -855,9 +872,9 @@ fn mcat_apply_grade(
 `mcat_answer_card`'s transact block becomes:
 
 ```rust
-        self.transact(crate::ops::Op::AnswerCard, |col| {
-            mcat_apply_grade(col, card_id, grade, milliseconds_taken)
-        })?;
+self.transact(crate::ops::Op::AnswerCard, |col| {
+    mcat_apply_grade(col, card_id, grade, milliseconds_taken)
+})?;
 ```
 
 - [ ] **Step 4: Adapter — new methods.** Inside `impl Collection` in `adapter.rs` (imports: add `use super::grader::grade_typed;`, `use super::grader::verdict_str;`, `use super::grader::GradedAnswer;`):
@@ -964,44 +981,44 @@ Run: `cargo test -p anki mcat::adapter` — expected: passes (with the earlier t
 - [ ] **Step 6: Service impl.** In `rslib/src/scheduler/service/mod.rs`, inside `impl crate::services::BackendSchedulerService for Backend` (after `export_dataset`); add imports at the top of the file: `use crate::mcat::grader::gave_up_result;`, `use crate::mcat::grader::AnswerGrader;`, `use crate::mcat::grader::OpenAiGrader;`, `use crate::mcat::grader::Verdict;`.
 
 ```rust
-    fn answer_mcat_card_typed(
-        &self,
-        input: scheduler::AnswerMcatCardTypedRequest,
-    ) -> Result<scheduler::AnswerMcatCardTypedResponse> {
-        let card_id = CardId(input.card_id);
-        let gave_up = input.gave_up || input.typed_answer.trim().is_empty();
-        // Read the term + canonical description up front so the collection
-        // lock is not held during the (retried, possibly slow) HTTP call.
-        let (front, back) = self.with_col(|col| col.mcat_flashcard_fields(card_id))?;
-        let graded = if gave_up {
-            gave_up_result()
-        } else {
-            OpenAiGrader::new(self.web_client(), self.runtime_handle()).grade_answer(
-                &front,
-                &back,
-                &input.typed_answer,
-            )?
-        };
-        let grade = self.with_col(|col| {
-            col.mcat_answer_card_typed(
-                card_id,
-                input.milliseconds_taken,
-                &graded,
-                &input.typed_answer,
-            )
-        })?;
-        Ok(scheduler::AnswerMcatCardTypedResponse {
-            verdict: match graded.verdict {
-                Verdict::Incorrect => {
-                    scheduler::answer_mcat_card_typed_response::Verdict::Incorrect
-                }
-                Verdict::Partial => scheduler::answer_mcat_card_typed_response::Verdict::Partial,
-                Verdict::Correct => scheduler::answer_mcat_card_typed_response::Verdict::Correct,
-            } as i32,
-            feedback: graded.feedback,
-            grade: grade.as_u8() as u32,
-        })
-    }
+fn answer_mcat_card_typed(
+    &self,
+    input: scheduler::AnswerMcatCardTypedRequest,
+) -> Result<scheduler::AnswerMcatCardTypedResponse> {
+    let card_id = CardId(input.card_id);
+    let gave_up = input.gave_up || input.typed_answer.trim().is_empty();
+    // Read the term + canonical description up front so the collection
+    // lock is not held during the (retried, possibly slow) HTTP call.
+    let (front, back) = self.with_col(|col| col.mcat_flashcard_fields(card_id))?;
+    let graded = if gave_up {
+        gave_up_result()
+    } else {
+        OpenAiGrader::new(self.web_client(), self.runtime_handle()).grade_answer(
+            &front,
+            &back,
+            &input.typed_answer,
+        )?
+    };
+    let grade = self.with_col(|col| {
+        col.mcat_answer_card_typed(
+            card_id,
+            input.milliseconds_taken,
+            &graded,
+            &input.typed_answer,
+        )
+    })?;
+    Ok(scheduler::AnswerMcatCardTypedResponse {
+        verdict: match graded.verdict {
+            Verdict::Incorrect => {
+                scheduler::answer_mcat_card_typed_response::Verdict::Incorrect
+            }
+            Verdict::Partial => scheduler::answer_mcat_card_typed_response::Verdict::Partial,
+            Verdict::Correct => scheduler::answer_mcat_card_typed_response::Verdict::Correct,
+        } as i32,
+        feedback: graded.feedback,
+        grade: grade.as_u8() as u32,
+    })
+}
 ```
 
 Note: `web_client()` and `runtime_handle()` are private to the backend module — check their visibility in `rslib/src/backend/mod.rs`; if they are `fn` (private) rather than `pub(crate) fn`, widen them to `pub(crate)` (matching `with_col`).
@@ -1012,6 +1029,7 @@ Note: `web_client()` and `runtime_handle()` are private to the backend module �
 cargo check -p anki
 cargo test -p anki mcat
 ```
+
 Expected: clean check (proto codegen runs in build.rs, so the new trait method must be implemented — a missing-method error here means the impl block or proto is wrong); all mcat tests pass.
 
 - [ ] **Step 8: Commit**
@@ -1026,10 +1044,12 @@ git commit -m "feat(mcat): AnswerMcatCardTyped RPC — LLM-graded typed flashcar
 ### Task 6: Python glue — .env loading + mediasrv exposure
 
 **Files:**
+
 - Modify: `qt/aqt/__init__.py`
 - Modify: `qt/aqt/mediasrv.py:766-772` (the MCAT block of `exposed_backend_list`)
 
 **Interfaces:**
+
 - Consumes: Task 5's backend method (generated as `RustBackend.answer_mcat_card_typed_raw` once pylib is rebuilt).
 - Produces: webview-reachable `answerMcatCardTyped` endpoint; `OPENAI_API_KEY`/`MCAT_GRADER_MODEL` in the process env for rslib.
 
@@ -1068,7 +1088,7 @@ Then make the first statement of `_run()` (immediately after its docstring, `qt/
 - [ ] **Step 2: Expose the RPC** — in `qt/aqt/mediasrv.py`, add to the MCAT block of `exposed_backend_list` (after `"answer_mcat_card"`):
 
 ```python
-    "answer_mcat_card_typed",
+"answer_mcat_card_typed",
 ```
 
 - [ ] **Step 3: Lint the Python**
@@ -1076,6 +1096,7 @@ Then make the first statement of `_run()` (immediately after its docstring, `qt/
 ```powershell
 tools\ninja check:mypy check:ruff
 ```
+
 Expected: clean. (If those target names don't exist, run `tools\ninja check` and read the failing edges — the justfile's `lint` recipe maps to the same checks.) Note: `mediasrv.py` asserts `hasattr(RustBackend, "answer_mcat_card_typed_raw")` at startup, which requires the rebuilt pylib from Task 8 — the assert only runs when Anki launches, not during lint.
 
 - [ ] **Step 4: Commit**
@@ -1090,9 +1111,11 @@ git commit -m "feat(mcat): expose typed-answer RPC + load OpenAI env at startup"
 ### Task 7: Frontend — typed-answer flashcard flow
 
 **Files:**
+
 - Modify: `ts/routes/mcat/study/StudyPage.svelte`
 
 **Interfaces:**
+
 - Consumes: `answerMcatCardTyped` from `@generated/backend`; `AnswerMcatCardTypedResponse_Verdict` from `@generated/anki/scheduler_pb` (both appear after the ninja build regenerates the TS bindings).
 - Produces: the user-facing flow. MCQ path untouched.
 
@@ -1101,6 +1124,7 @@ git commit -m "feat(mcat): expose typed-answer RPC + load OpenAI env at startup"
 ```powershell
 tools\ninja check:svelte
 ```
+
 Expected: build regenerates `out/ts/lib/generated/*`; typecheck passes on the unmodified tree. If new rust files aren't picked up by the build, delete `out\build.ninja` and rerun (per PRD build note).
 
 - [ ] **Step 2: Script changes in `StudyPage.svelte`:**
@@ -1108,169 +1132,176 @@ Expected: build regenerates `out/ts/lib/generated/*`; typecheck passes on the un
 a. Imports — extend the two generated imports:
 
 ```ts
-    import { AnswerMcatCardTypedResponse_Verdict, McatStudyItem_Kind } from "@generated/anki/scheduler_pb";
-    import { answerMcatCard, answerMcatCardTyped } from "@generated/backend";
+import {
+    AnswerMcatCardTypedResponse_Verdict,
+    McatStudyItem_Kind,
+} from "@generated/anki/scheduler_pb";
+import { answerMcatCard, answerMcatCardTyped } from "@generated/backend";
 ```
+
 (keep the existing `import type { McatStudyItem }` line).
 
 b. Replace the state block `let revealed = false;` with the typed-flow state (delete `revealed` everywhere):
 
 ```ts
-    type FlashPhase = "prompt" | "grading" | "graded" | "error";
-    let flashPhase: FlashPhase = "prompt";
-    let typedAnswer = "";
-    let verdict: AnswerMcatCardTypedResponse_Verdict = AnswerMcatCardTypedResponse_Verdict.INCORRECT;
-    let feedback = "";
-    let gaveUp = false;
-    let gradeError = "";
-    let submittedMs = 0;
+type FlashPhase = "prompt" | "grading" | "graded" | "error";
+let flashPhase: FlashPhase = "prompt";
+let typedAnswer = "";
+let verdict: AnswerMcatCardTypedResponse_Verdict =
+    AnswerMcatCardTypedResponse_Verdict.INCORRECT;
+let feedback = "";
+let gaveUp = false;
+let gradeError = "";
+let submittedMs = 0;
 ```
 
 c. Delete the whole `rate()` function; add in its place:
 
 ```ts
-    // Submit the typed answer (or give up) for LLM grading. Blocks until a
-    // verdict arrives — on failure the card stays unanswered and the same
-    // submission can be retried (block-until-graded, no self-grade fallback).
-    async function submitTyped(giveUp: boolean): Promise<void> {
-        if (!item || flashPhase === "grading" || flashPhase === "graded") {
-            return;
-        }
-        if (flashPhase === "prompt") {
-            // freeze latency at first submit; retries reuse it
-            submittedMs = elapsedMs();
-        }
-        gaveUp = giveUp || typedAnswer.trim().length === 0;
-        flashPhase = "grading";
-        gradeError = "";
-        try {
-            const resp = await answerMcatCardTyped({
-                cardId: item.cardId,
-                typedAnswer,
-                millisecondsTaken: submittedMs,
-                gaveUp,
-            });
-            verdict = resp.verdict;
-            feedback = resp.feedback;
-            flashPhase = "graded";
-            fire(
-                (["rate-again", "rate-hard", "rate-good", "rate-easy"] as const)[resp.grade - 1],
-            );
-        } catch (err) {
-            flashPhase = "error";
-            gradeError = err instanceof Error ? err.message : String(err);
-        }
+// Submit the typed answer (or give up) for LLM grading. Blocks until a
+// verdict arrives — on failure the card stays unanswered and the same
+// submission can be retried (block-until-graded, no self-grade fallback).
+async function submitTyped(giveUp: boolean): Promise<void> {
+    if (!item || flashPhase === "grading" || flashPhase === "graded") {
+        return;
     }
+    if (flashPhase === "prompt") {
+        // freeze latency at first submit; retries reuse it
+        submittedMs = elapsedMs();
+    }
+    gaveUp = giveUp || typedAnswer.trim().length === 0;
+    flashPhase = "grading";
+    gradeError = "";
+    try {
+        const resp = await answerMcatCardTyped({
+            cardId: item.cardId,
+            typedAnswer,
+            millisecondsTaken: submittedMs,
+            gaveUp,
+        });
+        verdict = resp.verdict;
+        feedback = resp.feedback;
+        flashPhase = "graded";
+        fire(
+            (["rate-again", "rate-hard", "rate-good", "rate-easy"] as const)[
+                resp.grade - 1
+            ],
+        );
+    } catch (err) {
+        flashPhase = "error";
+        gradeError = err instanceof Error ? err.message : String(err);
+    }
+}
 
-    function onAnswerKeydown(e: KeyboardEvent): void {
-        if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            submitTyped(false);
-        } else if (e.key === "Escape") {
-            e.preventDefault();
-            submitTyped(true);
-        }
+function onAnswerKeydown(e: KeyboardEvent): void {
+    if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        submitTyped(false);
+    } else if (e.key === "Escape") {
+        e.preventDefault();
+        submitTyped(true);
     }
+}
 ```
 
 d. `next()` — replace `revealed = false;` with the typed-state reset:
 
 ```ts
-    function next(): void {
-        index += 1;
-        flashPhase = "prompt";
-        typedAnswer = "";
-        feedback = "";
-        gaveUp = false;
-        gradeError = "";
-        chosen = null;
-        startedAt = Date.now();
-        now = Date.now();
-    }
+function next(): void {
+    index += 1;
+    flashPhase = "prompt";
+    typedAnswer = "";
+    feedback = "";
+    gaveUp = false;
+    gradeError = "";
+    chosen = null;
+    startedAt = Date.now();
+    now = Date.now();
+}
 ```
 
 e. `onKeydown` — replace the flashcard else-branch (the `!revealed` / `["1","2","3","4"]` block) with:
 
 ```ts
-        } else if (flashPhase === "graded" && (key === " " || key === "enter")) {
-            event.preventDefault();
-            next();
-        }
+} else if (flashPhase === "graded" && (key === " " || key === "enter")) {
+    event.preventDefault();
+    next();
+}
 ```
 
 f. Add the verdict label reactive statement (near the other `$:` lines):
 
 ```ts
-    $: verdictLabel = gaveUp
-        ? "Didn't know — marked Again"
-        : verdict === AnswerMcatCardTypedResponse_Verdict.CORRECT
-          ? "Correct"
-          : verdict === AnswerMcatCardTypedResponse_Verdict.PARTIAL
-            ? "Partially correct"
-            : "Incorrect";
+$: verdictLabel = gaveUp
+    ? "Didn't know — marked Again"
+    : verdict === AnswerMcatCardTypedResponse_Verdict.CORRECT
+    ? "Correct"
+    : verdict === AnswerMcatCardTypedResponse_Verdict.PARTIAL
+    ? "Partially correct"
+    : "Incorrect";
 ```
 
 - [ ] **Step 3: Replace the flashcard markup branch** (everything between `{:else}` after the MCQ block and the final `{/if}` of the kind switch — currently the `QuestionCard front=... center` line through the ratings/reveal block):
 
 ```svelte
-        {:else}
-            <QuestionCard front={item.front} alt={`${item.leafName} prompt`} center />
-            {#if flashPhase === "prompt" || flashPhase === "error"}
-                <div class="typed-entry">
-                    <!-- svelte-ignore a11y-autofocus -->
-                    <textarea
-                        bind:value={typedAnswer}
-                        rows="3"
-                        placeholder="Describe this term from memory…"
-                        autofocus
-                        on:keydown={onAnswerKeydown}
-                    ></textarea>
-                    <div class="typed-actions">
-                        <button class="primary" on:click={() => submitTyped(false)}>
-                            Submit <KeyHint key="↵" />
-                        </button>
-                        <IdkButton on:choose={() => submitTyped(true)} />
-                    </div>
-                </div>
-                {#if flashPhase === "error"}
-                    <div class="feedback grade-error">
-                        <strong>Grading failed — your answer is kept.</strong>
-                        <p>{gradeError}</p>
-                        <button class="primary" on:click={() => submitTyped(gaveUp)}>
-                            Retry
-                        </button>
-                    </div>
-                {/if}
-            {:else}
-                <div class="answer">
-                    <hr />
-                    <p class="back">{item.back}</p>
-                </div>
-                {#if !gaveUp && typedAnswer.trim()}
-                    <p class="typed-echo"><span>Your answer:</span> {typedAnswer}</p>
-                {/if}
-                {#if flashPhase === "grading"}
-                    <div class="grading">Grading your answer…</div>
-                {:else}
-                    <div
-                        class="feedback"
-                        class:correct={!gaveUp &&
-                            verdict === AnswerMcatCardTypedResponse_Verdict.CORRECT}
-                        class:partial={!gaveUp &&
-                            verdict === AnswerMcatCardTypedResponse_Verdict.PARTIAL}
-                        class:idk={gaveUp}
-                    >
-                        <strong>{verdictLabel}</strong>
-                        {#if feedback}
-                            <p>{feedback}</p>
-                        {/if}
-                        <button class="primary" on:click={next}>
-                            Continue <KeyHint key="␣" />
-                        </button>
-                    </div>
-                {/if}
-            {/if}
+{:else}
+    <QuestionCard front={item.front} alt={`${item.leafName} prompt`} center />
+    {#if flashPhase === "prompt" || flashPhase === "error"}
+        <div class="typed-entry">
+            <!-- svelte-ignore a11y-autofocus -->
+            <textarea
+                bind:value={typedAnswer}
+                rows="3"
+                placeholder="Describe this term from memory…"
+                autofocus
+                on:keydown={onAnswerKeydown}
+            ></textarea>
+            <div class="typed-actions">
+                <button class="primary" on:click={() => submitTyped(false)}>
+                    Submit <KeyHint key="↵" />
+                </button>
+                <IdkButton on:choose={() => submitTyped(true)} />
+            </div>
+        </div>
+        {#if flashPhase === "error"}
+            <div class="feedback grade-error">
+                <strong>Grading failed — your answer is kept.</strong>
+                <p>{gradeError}</p>
+                <button class="primary" on:click={() => submitTyped(gaveUp)}>
+                    Retry
+                </button>
+            </div>
         {/if}
+    {:else}
+        <div class="answer">
+            <hr />
+            <p class="back">{item.back}</p>
+        </div>
+        {#if !gaveUp && typedAnswer.trim()}
+            <p class="typed-echo"><span>Your answer:</span> {typedAnswer}</p>
+        {/if}
+        {#if flashPhase === "grading"}
+            <div class="grading">Grading your answer…</div>
+        {:else}
+            <div
+                class="feedback"
+                class:correct={!gaveUp &&
+                    verdict === AnswerMcatCardTypedResponse_Verdict.CORRECT}
+                class:partial={!gaveUp &&
+                    verdict === AnswerMcatCardTypedResponse_Verdict.PARTIAL}
+                class:idk={gaveUp}
+            >
+                <strong>{verdictLabel}</strong>
+                {#if feedback}
+                    <p>{feedback}</p>
+                {/if}
+                <button class="primary" on:click={next}>
+                    Continue <KeyHint key="␣" />
+                </button>
+            </div>
+        {/if}
+    {/if}
+{/if}
 ```
 
 - [ ] **Step 4: CSS** — delete the now-unused `.reveal`, `.ratings`, and `.rating*` rules; add:
@@ -1348,6 +1379,7 @@ f. Add the verdict label reactive statement (near the other `$:` lines):
 ```powershell
 tools\ninja check:svelte
 ```
+
 Expected: clean (no unused-selector or a11y warnings).
 
 - [ ] **Step 6: Commit**
@@ -1362,6 +1394,7 @@ git commit -m "feat(mcat): typed short-answer flashcard flow with LLM verdict UI
 ### Task 8: Full build, docs, and end-to-end verification
 
 **Files:**
+
 - Modify: `Planning/PRD.md`
 - Everything built by `tools\ninja pylib qt check`
 
@@ -1386,6 +1419,7 @@ FLASHCARDS (rote) - TYPED + LLM-GRADED: the student TYPES a short description of
 $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
 tools\ninja pylib qt check
 ```
+
 Expected: format, Rust/Python/TS checks and tests all pass. If the CargoBuild glob misses `grader.rs`, delete `out\build.ninja` and rerun.
 
 - [ ] **Step 4: Rust test suite sanity**
@@ -1393,6 +1427,7 @@ Expected: format, Rust/Python/TS checks and tests all pass. If the CargoBuild gl
 ```powershell
 cargo test -p anki --lib
 ```
+
 Expected: all pass (~560+ tests).
 
 - [ ] **Step 5: Manual end-to-end QA** (real key, real model): launch the app (`just run` equivalent: `tools\ninja run`, or ask the user to run it), open Study, and verify on a flashcard:
@@ -1401,7 +1436,7 @@ Expected: all pass (~560+ tests).
   3. empty submit behaves like I-don't-know;
   4. with `OPENAI_API_KEY` removed from the environment and `.env` renamed → submit shows "Grading failed", Retry after restoring works;
   5. dashboard readiness recomputes after the session.
-  Record what was verified in the commit/report.
+     Record what was verified in the commit/report.
 
 - [ ] **Step 6: Commit**
 

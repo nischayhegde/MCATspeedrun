@@ -11,6 +11,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     export let counter = "";
     export let paceState: "gold" | "steel" | null = null;
     export let timerText = "";
+    export let showPause = false;
+    export let paused = false;
 </script>
 
 <header class="progress-row">
@@ -18,6 +20,15 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     <div class="progress-track">
         <div class="progress-fill" style:width={`${progress * 100}%`}></div>
     </div>
+    {#if showPause}
+        <button
+            class="pause-toggle"
+            title={paused ? "Resume" : "Pause"}
+            on:click={() => dispatch("pauseclick")}
+        >
+            {paused ? "▶ Resume" : "⏸ Pause"}
+        </button>
+    {/if}
     {#if timerText}
         <button
             class="timer"
@@ -47,7 +58,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         color: inherit;
         opacity: 0.6;
         border-radius: 0.4rem;
-        transition: background 0.12s ease, opacity 0.12s ease;
+        transition:
+            background 0.12s ease,
+            opacity 0.12s ease;
         @include sf.focusable;
         &:hover {
             opacity: 1;
@@ -67,6 +80,26 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         background: linear-gradient(90deg, var(--sf-red-deep), var(--sf-red));
         transition: width 0.2s ease;
     }
+    .pause-toggle {
+        flex-shrink: 0;
+        border: 1px solid var(--sf-border);
+        background: none;
+        cursor: pointer;
+        color: inherit;
+        font-size: 12px;
+        font-weight: 700;
+        padding: 0.3rem 0.6rem;
+        border-radius: 0.4rem;
+        opacity: 0.75;
+        transition:
+            background 0.12s ease,
+            opacity 0.12s ease;
+        @include sf.focusable;
+        &:hover {
+            opacity: 1;
+            background: color-mix(in srgb, var(--sf-text) 8%, transparent);
+        }
+    }
     .timer {
         display: inline-flex;
         align-items: center;
@@ -79,7 +112,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         color: inherit;
         font-variant-numeric: tabular-nums;
         border-radius: 0.4rem;
-        transition: background 0.12s ease, opacity 0.12s ease;
+        transition:
+            background 0.12s ease,
+            opacity 0.12s ease;
         @include sf.focusable;
         &:hover {
             opacity: 1;

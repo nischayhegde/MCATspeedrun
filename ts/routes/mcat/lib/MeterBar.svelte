@@ -9,7 +9,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     $: pct = Math.round(Math.max(0, Math.min(1, value)) * 100);
 </script>
 
-<div class="track" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+<div
+    class="track"
+    role="progressbar"
+    aria-valuenow={pct}
+    aria-valuemin={0}
+    aria-valuemax={100}
+>
     <div class="fill {tone}" style:width={`${pct}%`}></div>
 </div>
 

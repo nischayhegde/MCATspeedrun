@@ -55,6 +55,10 @@ test("no-ops under prefers-reduced-motion", () => {
 
 test("does nothing (does not throw) when fewer than 2 keyframes are given", () => {
     fakeMatchMedia(false);
-    const el = { animate: () => { throw new Error("should not be called"); } };
+    const el = {
+        animate: () => {
+            throw new Error("should not be called");
+        },
+    };
     expect(() => morphPath(el, ["M 0 0 Z"], { durationMs: 300 })).not.toThrow();
 });

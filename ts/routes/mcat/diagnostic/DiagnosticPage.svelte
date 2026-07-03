@@ -225,9 +225,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     $: correctTotal = sectionRows.reduce((n, r) => n + r.correct, 0);
     $: answeredTotal = sectionRows.reduce((n, r) => n + r.total, 0);
     $: pct = answeredTotal ? Math.round((correctTotal / answeredTotal) * 100) : 0;
-    $: delta = readiness && before
-        ? readiness.readinessScore - before.readinessScore
-        : 0;
+    $: delta =
+        readiness && before ? readiness.readinessScore - before.readinessScore : 0;
 </script>
 
 <svelte:window on:keydown={onKeydown} />
@@ -281,10 +280,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             on:choose={(e) => onChoose(e.detail.letter)}
         />
 
-        <IdkButton
-            selected={pending === IDK}
-            on:choose={() => onChoose(IDK)}
-        />
+        <IdkButton selected={pending === IDK} on:choose={() => onChoose(IDK)} />
 
         <p class="lock-hint" class:show={pending !== null && index < 3}>
             press again to lock in
@@ -292,7 +288,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
         {#if confirmOpen}
             <div class="confirm-scrim">
-                <div class="confirm" role="dialog" aria-modal="true" aria-label="Submit diagnostic">
+                <div
+                    class="confirm"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Submit diagnostic"
+                >
                     <p class="confirm-title">
                         Submit now? {answeredCount} answered · {total - answeredCount} unanswered.
                     </p>
@@ -317,7 +318,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     {:else if phase === "results" && readiness}
         <div class="panel results">
             <h1>Diagnostic complete</h1>
-            <div class="headline">{correctTotal} / {answeredTotal} correct ({pct}%)</div>
+            <div class="headline">
+                {correctTotal} / {answeredTotal} correct ({pct}%)
+            </div>
             <p class="delta">
                 Readiness: {before?.readinessScore ?? "—"} → {readiness.readinessScore}
                 ({delta >= 0 ? "+" + delta : delta}) / 528 · ±{readiness.confidenceBand} pts

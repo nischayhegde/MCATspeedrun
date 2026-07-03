@@ -23,9 +23,11 @@
 ### Task 1: model.rs — constants, Review fields, schedule-aware spacing, recall credit
 
 **Files:**
+
 - Modify: `rslib/src/mcat/model.rs`
 
 **Interfaces:**
+
 - Produces: `Review.scheduled_days: f32`, `Review.difficulty: u8`,
   `Grade::recall_credit(self) -> f32`, reworked `Review::spacing_weight()`,
   constants `GUESS_RATE`, `SPEED_QUALITY_FLOOR`, `DIFF_EVIDENCE_STEP`,
@@ -39,51 +41,51 @@
 In the `Review` struct after `objective`:
 
 ```rust
-    /// Scheduled gap (days) the previous review set for this one; 0.0 when
-    /// unknown (first review, learning steps).
-    pub scheduled_days: f32,
-    /// Item difficulty 1..=5 from `mcat::diff::N`; 3 when untagged.
-    pub difficulty: u8,
+/// Scheduled gap (days) the previous review set for this one; 0.0 when
+/// unknown (first review, learning steps).
+pub scheduled_days: f32,
+/// Item difficulty 1..=5 from `mcat::diff::N`; 3 when untagged.
+pub difficulty: u8,
 ```
 
 Replace `spacing_weight`:
 
 ```rust
-    /// Evidence weight of this review for fluency: how much forgetting the
-    /// recall actually fought through. When the scheduled interval is known
-    /// (review phase), estimate retrievability at answer time assuming the
-    /// scheduler targeted R_TARGET at the due date — answering on schedule is
-    /// full evidence at any interval length, answering early proportionally
-    /// less. Otherwise (first exposure, learning steps) fall back to the
-    /// elapsed-days ramp.
-    pub fn spacing_weight(&self) -> f32 {
-        if self.scheduled_days >= 1.0 && self.elapsed_days > 0.0 {
-            let r_hat = R_TARGET.powf(self.elapsed_days / self.scheduled_days);
-            clamp01((1.0 - r_hat) / (1.0 - R_TARGET))
-        } else if self.elapsed_days <= 0.0 {
-            if self.massed {
-                0.0
-            } else {
-                1.0
-            }
+/// Evidence weight of this review for fluency: how much forgetting the
+/// recall actually fought through. When the scheduled interval is known
+/// (review phase), estimate retrievability at answer time assuming the
+/// scheduler targeted R_TARGET at the due date — answering on schedule is
+/// full evidence at any interval length, answering early proportionally
+/// less. Otherwise (first exposure, learning steps) fall back to the
+/// elapsed-days ramp.
+pub fn spacing_weight(&self) -> f32 {
+    if self.scheduled_days >= 1.0 && self.elapsed_days > 0.0 {
+        let r_hat = R_TARGET.powf(self.elapsed_days / self.scheduled_days);
+        clamp01((1.0 - r_hat) / (1.0 - R_TARGET))
+    } else if self.elapsed_days <= 0.0 {
+        if self.massed {
+            0.0
         } else {
-            clamp01(self.elapsed_days / SPACING_FULL_DAYS)
+            1.0
         }
+    } else {
+        clamp01(self.elapsed_days / SPACING_FULL_DAYS)
     }
+}
 ```
 
 On `Grade`:
 
 ```rust
-    /// Recall credit as fluency evidence: full for Good/Easy, partial for
-    /// Hard (a Partial LLM verdict, or a self-graded "hard"), none for Again.
-    pub fn recall_credit(self) -> f32 {
-        match self {
-            Grade::Again => 0.0,
-            Grade::Hard => PARTIAL_CREDIT,
-            Grade::Good | Grade::Easy => 1.0,
-        }
+/// Recall credit as fluency evidence: full for Good/Easy, partial for
+/// Hard (a Partial LLM verdict, or a self-graded "hard"), none for Again.
+pub fn recall_credit(self) -> f32 {
+    match self {
+        Grade::Again => 0.0,
+        Grade::Hard => PARTIAL_CREDIT,
+        Grade::Good | Grade::Easy => 1.0,
     }
+}
 ```
 
 Constants (replace the `SELF_GRADED_EVIDENCE_WEIGHT`/`APP_FLUENCY_FLOOR` block comment area additions):
@@ -162,15 +164,17 @@ mod tests {
 
 - [ ] **Step 3: Run model tests** — `cargo test -p anki mcat::model` — expect PASS (aggregate/adapter still broken until Tasks 3/5; use `cargo test -p anki mcat::model --no-fail-fast 2>&1 | head` if the crate build blocks, then proceed to Task 2/3 and re-run).
 
-*(Compile note: Tasks 1–5 are one compile unit in practice; commit after the crate is green at Task 3 and Task 5 boundaries.)*
+_(Compile note: Tasks 1–5 are one compile unit in practice; commit after the crate is green at Task 3 and Task 5 boundaries.)_
 
 ### Task 2: grader.rs — untimed verdict mapping
 
 **Files:**
+
 - Modify: `rslib/src/mcat/grader.rs`
 - Modify: `rslib/src/mcat/adapter.rs` (two call sites)
 
 **Interfaces:**
+
 - Produces: `grade_typed(verdict: Verdict) -> Grade` (ms parameter removed);
   `typed_latency()` deleted.
 
@@ -205,7 +209,7 @@ fn verdicts_map_to_grades_untimed() {
 `build_card_reviews`: delete the `typed_latency` branch —
 
 ```rust
-        let objective = is_app || objective_ids.contains(&ts);
+let objective = is_app || objective_ids.contains(&ts);
 ```
 
 (and use the passed `latency` unconditionally in the Review literal; remove the
@@ -216,9 +220,11 @@ fn verdicts_map_to_grades_untimed() {
 ### Task 3: aggregate.rs — consistency fluency, corrected application, recovery gate
 
 **Files:**
+
 - Modify: `rslib/src/mcat/aggregate.rs`
 
 **Interfaces:**
+
 - Consumes: `Grade::recall_credit`, `Review.difficulty`, new `spacing_weight`,
   constants from Task 1.
 - Produces: same `score_leaf(&Leaf, &[Review], &[RoteMemory], i64) -> LeafState`
@@ -346,12 +352,12 @@ Keep `recency_weight`, `fastness`, `app_spacing_weights`. Delete the generic
 instruction, not evidence):
 
 ```rust
-    let attempts = rote_reviews
-        .iter()
-        .filter(|r| !r.productive_failure)
-        .map(|r| r.spacing_weight())
-        .sum::<f32>()
-        + app_spacing.iter().sum::<f32>();
+let attempts = rote_reviews
+    .iter()
+    .filter(|r| !r.productive_failure)
+    .map(|r| r.spacing_weight())
+    .sum::<f32>()
+    + app_spacing.iter().sum::<f32>();
 ```
 
 - [ ] **Step 2: Rewrite the test module**
@@ -477,10 +483,12 @@ fn productive_failure_is_instruction_not_evidence() {
 ### Task 4: taxonomy.rs + scoring.rs + service — FC-pooled shrinkage
 
 **Files:**
+
 - Modify: `rslib/src/mcat/taxonomy.rs`, `rslib/src/mcat/scoring.rs`,
   `rslib/src/scheduler/service/mod.rs:483`
 
 **Interfaces:**
+
 - Produces: `Leaf.fc: &'static str`;
   `mastery_adjusted(leaf: &Leaf, s: &LeafState, states: &HashMap<String, LeafState>) -> f32`.
 
@@ -576,9 +584,11 @@ fn strong_fc_siblings_lift_a_thin_leaf() {
 ### Task 5: adapter.rs — scheduled_days, difficulty, PF fix, pace factor
 
 **Files:**
+
 - Modify: `rslib/src/mcat/adapter.rs`
 
 **Interfaces:**
+
 - Consumes: Task 1 fields/constants.
 - Produces: `build_card_reviews(entries, kind, is_app, cars, latency, difficulty, objective_ids)`;
   `pace_factor_from_ratios(ratios: Vec<f32>) -> f32`; config key
@@ -593,14 +603,14 @@ first attempt on a fresh MCQ is a genuine signal — instruction already
 happened at the rote stage):
 
 ```rust
-    let mut prev_interval: i32 = 0;
-    ...
-    let productive_failure = !is_app && reps == 0 && !correct;
-    let scheduled_days = if prev_interval > 0 { prev_interval as f32 } else { 0.0 };
-    ...
-    out.push(Review { ..., scheduled_days, difficulty, ... });
-    prev_ts = Some(ts);
-    prev_interval = e.interval;
+let mut prev_interval: i32 = 0;
+...
+let productive_failure = !is_app && reps == 0 && !correct;
+let scheduled_days = if prev_interval > 0 { prev_interval as f32 } else { 0.0 };
+...
+out.push(Review { ..., scheduled_days, difficulty, ... });
+prev_ts = Some(ts);
+prev_interval = e.interval;
 ```
 
 Caller (`mcat_leaf_inputs`) passes `difficulty_from_tags(&note.tags)`.
@@ -688,23 +698,24 @@ fn pace_factor_median_and_clamp() {
 ### Task 6: PRD + full gate
 
 **Files:**
+
 - Modify: `planning/PRD.md` (FLUENCY, evidence rules, OBJECTIVE FLUENCY
   SIGNAL, SCORE DYNAMICS, GRADING & RATING, parameters list)
 - Check: `mcat_tools/e2e_test.py`, `mcat_tools/e2e_typed_grading.py`
   (assertions on typed grades — fast correct is now Good, never Easy)
 
 - [ ] **Step 1: PRD edits** — flashcards are untimed (verdict-only; latency
-  applies to MCQs); fluency = FSRS durability + spaced verdict consistency
-  (partial = half credit); application = chance-corrected accuracy ×
-  speed quality with difficulty-weighted evidence; demonstrated application
-  threshold (≥ ~2 effective corrects and corrected accuracy ≥ 0.5); gate
-  re-earned after a lapse; readiness shrinks toward FC-pooled priors;
-  per-student MCQ pace factor. Update the tunables list.
+      applies to MCQs); fluency = FSRS durability + spaced verdict consistency
+      (partial = half credit); application = chance-corrected accuracy ×
+      speed quality with difficulty-weighted evidence; demonstrated application
+      threshold (≥ ~2 effective corrects and corrected accuracy ≥ 0.5); gate
+      re-earned after a lapse; readiness shrinks toward FC-pooled priors;
+      per-student MCQ pace factor. Update the tunables list.
 - [ ] **Step 2: e2e expectation check** — grep both e2e scripts for grade
-  assertions (`== 4`, `Easy`); update to Good where they cover typed correct
-  answers.
+      assertions (`== 4`, `Easy`); update to Good where they cover typed correct
+      answers.
 - [ ] **Step 3: Full gate** — `cargo test -p anki --lib` green; `cargo fmt`
-  on touched files (`rustfmt` via `$env:USERPROFILE\.cargo\bin`).
+      on touched files (`rustfmt` via `$env:USERPROFILE\.cargo\bin`).
 - [ ] **Step 4: Commit** — `docs(mcat): PRD reflects untimed flashcards + objective-evidence scoring`
 
 ## Self-Review

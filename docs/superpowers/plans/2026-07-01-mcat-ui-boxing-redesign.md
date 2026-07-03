@@ -30,10 +30,12 @@
 ### Task 1: Difficulty plumbing (proto + rslib)
 
 **Files:**
+
 - Modify: `proto/anki/scheduler.proto:545-566` (message McatStudyItem)
 - Modify: `rslib/src/mcat/adapter.rs` (build_study_item ~:375-437, helpers ~:607, tests ~:637)
 
 **Interfaces:**
+
 - Produces (consumed by Tasks 6, 10, 11, 13 via `@generated/anki/scheduler_pb`): `McatStudyItem.difficulty: number` (1–5, 3 when untagged), `McatStudyItem.fsrsDifficulty: number` (raw 1.0–10.0, 0 = no memory state), `McatStudyItem.difficultyTagged: boolean`.
 
 - [ ] **Step 1: Write the failing Rust test** — in the `#[cfg(test)] mod test` block of `rslib/src/mcat/adapter.rs` (next to `difficulty_parsed_from_tags`, ~:652), add:
@@ -81,15 +83,15 @@ fn has_difficulty_tag(tags: &[String]) -> bool {
 - [ ] **Step 5: Add the proto fields** — in `proto/anki/scheduler.proto`, `message McatStudyItem`, after `string explanation = 12;`:
 
 ```proto
-  // Authored difficulty from the mcat::diff::N tag, 1-5. 3 when untagged
-  // (see difficulty_tagged).
-  uint32 difficulty = 13;
-  // FSRS memory-state difficulty, raw 1.0-10.0. 0.0 = no memory state yet
-  // (new/reset card); consumers must fall back to `difficulty`.
-  float fsrs_difficulty = 14;
-  // True when the note actually carries an mcat::diff/difficulty tag, so
-  // the frontend can distinguish "authored medium" from "untagged".
-  bool difficulty_tagged = 15;
+// Authored difficulty from the mcat::diff::N tag, 1-5. 3 when untagged
+// (see difficulty_tagged).
+uint32 difficulty = 13;
+// FSRS memory-state difficulty, raw 1.0-10.0. 0.0 = no memory state yet
+// (new/reset card); consumers must fall back to `difficulty`.
+float fsrs_difficulty = 14;
+// True when the note actually carries an mcat::diff/difficulty tag, so
+// the frontend can distinguish "authored medium" from "untagged".
+bool difficulty_tagged = 15;
 ```
 
 - [ ] **Step 6: Wire the fields in `build_study_item`** — in `rslib/src/mcat/adapter.rs`, change `let item = match kind {` (~:404) to `let mut item = match kind {`, and before the function's final `Ok(Some(item))` add:
@@ -123,10 +125,12 @@ git commit -m "feat(mcat): expose authored + FSRS difficulty on McatStudyItem"
 ### Task 2: Token layer + shell/nav refresh
 
 **Files:**
+
 - Modify: `ts/routes/mcat/+layout.svelte`
 - Create: `ts/routes/mcat/lib/mixins.scss`
 
 **Interfaces:**
+
 - Produces: CSS custom properties `--sf-ok`, `--sf-ok-deep`, `--sf-err`, `--sf-warn`, `--sf-steel`, `--sf-r-sm/md/lg`, `--sf-shadow-1/2`, `--sf-focus` available under `.mcat-shell` (every mcat component). SCSS mixins `sf.button-primary`, `sf.button-secondary`, `sf.button-ghost`, `sf.focusable` via `@use "../lib/mixins" as sf;` (adjust relative path per file depth).
 
 - [ ] **Step 1: Add tokens** — in `+layout.svelte` `.mcat-shell` rule, after the existing nine `--sf-*` tokens:
@@ -247,9 +251,11 @@ git commit -m "feat(mcat): semantic tokens, focus ring, quieter nav with kbd leg
 ### Task 3: Shared UI primitives (`ts/routes/mcat/lib/`)
 
 **Files:**
+
 - Create: `ts/routes/mcat/lib/KeyHint.svelte`, `MeterBar.svelte`, `SessionHeader.svelte`, `QuestionCard.svelte`, `ChoiceGrid.svelte`, `IdkButton.svelte`
 
 **Interfaces:**
+
 - Produces (consumed by Tasks 11–13):
   - `KeyHint` — `export let key: string;` renders a kbd chip.
   - `MeterBar` — `export let value: number; export let tone: "red" | "gold" = "red";` (value 0–1) track+fill bar.
@@ -657,10 +663,12 @@ git commit -m "feat(mcat): shared UI primitives (SessionHeader, ChoiceGrid, Ques
 ### Task 4: RNG + ShuffleBag (`ring/rng.ts`)
 
 **Files:**
+
 - Create: `ts/routes/mcat/ring/rng.ts`
 - Test: `ts/routes/mcat/ring/rng.test.ts`
 
 **Interfaces:**
+
 - Produces: `mulberry32(seed: number): () => number` (0..1); `class ShuffleBag<T> { constructor(items: T[], rng: () => number); next(): T }` (deals all items before repeating; never deals the same item twice in a row across refills when items.length > 1); `hashId(id: bigint, salt?: number): number` (deterministic 0..2^31 int from a card id).
 
 - [ ] **Step 1: Write failing tests** (`rng.test.ts`, AGPL header, `import { expect, test } from "vitest";`):
@@ -737,7 +745,10 @@ export class ShuffleBag<T> {
                 const j = Math.floor(this.rng() * (i + 1));
                 [this.bag[i], this.bag[j]] = [this.bag[j], this.bag[i]];
             }
-            if (this.pool.length > 1 && this.bag[this.bag.length - 1] === this.last) {
+            if (
+                this.pool.length > 1
+                && this.bag[this.bag.length - 1] === this.last
+            ) {
                 [this.bag[0], this.bag[this.bag.length - 1]] = [
                     this.bag[this.bag.length - 1],
                     this.bag[0],
@@ -751,7 +762,8 @@ export class ShuffleBag<T> {
 
 /** Deterministic 31-bit hash of a card id (+salt) for stable cosmetic picks. */
 export function hashId(id: bigint, salt = 0): number {
-    let h = Number(((id % 2147483647n) + 2147483647n) % 2147483647n) ^ (salt * 2654435761);
+    let h = Number(((id % 2147483647n) + 2147483647n) % 2147483647n)
+        ^ (salt * 2654435761);
     h = Math.imul(h ^ (h >>> 16), 2246822519);
     h = Math.imul(h ^ (h >>> 13), 3266489917);
     return (h ^ (h >>> 16)) >>> 0;
@@ -772,10 +784,12 @@ git commit -m "feat(mcat): session RNG, ShuffleBag, deterministic card hash"
 ### Task 5: Parametric body geometry (`ring/geometry.ts`)
 
 **Files:**
+
 - Create: `ts/routes/mcat/ring/geometry.ts`
 - Test: `ts/routes/mcat/ring/geometry.test.ts`
 
 **Interfaces:**
+
 - Produces (consumed by FighterRig/roster):
   - `capsulePath(x1, y1, r1, x2, y2, r2): string` — closed tapered-capsule SVG path.
   - `type JointName = "root" | "pelvis" | "spine" | "chest" | "neck" | "head" | "armFront" | "forearmFront" | "armBack" | "forearmBack" | "legFront" | "shinFront" | "legBack" | "shinBack";`
@@ -788,7 +802,7 @@ git commit -m "feat(mcat): session RNG, ShuffleBag, deterministic card hash"
 ```ts
 import { expect, test } from "vitest";
 
-import { BUILD_BULK, bodyPaths, capsulePath, joints } from "./geometry";
+import { bodyPaths, BUILD_BULK, capsulePath, joints } from "./geometry";
 
 test("capsulePath is a closed path with two arc caps", () => {
     const p = capsulePath(0, 0, 3, 0, 20, 5);
@@ -821,18 +835,38 @@ test("torso silhouette steps through 4 drawn variants", () => {
 
 ```ts
 export type JointName =
-    | "root" | "pelvis" | "spine" | "chest" | "neck" | "head"
-    | "armFront" | "forearmFront" | "armBack" | "forearmBack"
-    | "legFront" | "shinFront" | "legBack" | "shinBack";
+    | "root"
+    | "pelvis"
+    | "spine"
+    | "chest"
+    | "neck"
+    | "head"
+    | "armFront"
+    | "forearmFront"
+    | "armBack"
+    | "forearmBack"
+    | "legFront"
+    | "shinFront"
+    | "legBack"
+    | "shinBack";
 
-export const BUILD_BULK = { lean: 0, fit: 0.35, heavy: 0.7, colossal: 1 } as const;
+export const BUILD_BULK = {
+    lean: 0,
+    fit: 0.35,
+    heavy: 0.7,
+    colossal: 1,
+} as const;
 
 const fmt = (n: number): string => n.toFixed(2);
 
 /** Closed tapered capsule from (x1,y1,r1) to (x2,y2,r2). */
 export function capsulePath(
-    x1: number, y1: number, r1: number,
-    x2: number, y2: number, r2: number,
+    x1: number,
+    y1: number,
+    r1: number,
+    x2: number,
+    y2: number,
+    r2: number,
 ): string {
     const dx = x2 - x1;
     const dy = y2 - y1;
@@ -842,9 +876,13 @@ export function capsulePath(
     return [
         `M ${fmt(x1 + nx * r1)} ${fmt(y1 + ny * r1)}`,
         `L ${fmt(x2 + nx * r2)} ${fmt(y2 + ny * r2)}`,
-        `A ${fmt(r2)} ${fmt(r2)} 0 0 1 ${fmt(x2 - nx * r2)} ${fmt(y2 - ny * r2)}`,
+        `A ${fmt(r2)} ${fmt(r2)} 0 0 1 ${fmt(x2 - nx * r2)} ${
+            fmt(y2 - ny * r2)
+        }`,
         `L ${fmt(x1 - nx * r1)} ${fmt(y1 - ny * r1)}`,
-        `A ${fmt(r1)} ${fmt(r1)} 0 0 1 ${fmt(x1 + nx * r1)} ${fmt(y1 + ny * r1)}`,
+        `A ${fmt(r1)} ${fmt(r1)} 0 0 1 ${fmt(x1 + nx * r1)} ${
+            fmt(y1 + ny * r1)
+        }`,
         "Z",
     ].join(" ");
 }
@@ -879,7 +917,8 @@ const LIMB_R = {
     shin: [4.2, 3.0],
     neck: [3.0, 3.0],
 } as const;
-const widen = (r: number, bulk: number, f: number): number => r * (1 + f * bulk);
+const widen = (r: number, bulk: number, f: number): number =>
+    r * (1 + f * bulk);
 
 /* 4 drawn torso silhouettes (lean taper -> colossal trapezius hump) */
 const TORSOS = [
@@ -905,18 +944,41 @@ export function bodyPaths(bulk: number): {
     const a = (r: number) => widen(r, bulk, 0.35); // arms + neck
     const l = (r: number) => widen(r, bulk, 0.25); // legs
     const seg = (
-        from: [number, number], to: [number, number],
-        r: readonly [number, number], w: (r: number) => number,
+        from: [number, number],
+        to: [number, number],
+        r: readonly [number, number],
+        w: (r: number) => number,
     ) => capsulePath(from[0], from[1], w(r[0]), to[0], to[1], w(r[1]));
-    const torso = bulk < 0.2 ? TORSOS[0] : bulk < 0.55 ? TORSOS[1] : bulk < 0.85 ? TORSOS[2] : TORSOS[3];
+    const torso = bulk < 0.2
+        ? TORSOS[0]
+        : bulk < 0.55
+        ? TORSOS[1]
+        : bulk < 0.85
+        ? TORSOS[2]
+        : TORSOS[3];
     return {
         limbs: {
             armFront: seg(j.armFront, j.forearmFront, LIMB_R.arm, a),
-            forearmFront: seg(j.forearmFront, [j.forearmFront[0] + 8, j.forearmFront[1] + 12], LIMB_R.forearm, a),
+            forearmFront: seg(
+                j.forearmFront,
+                [j.forearmFront[0] + 8, j.forearmFront[1] + 12],
+                LIMB_R.forearm,
+                a,
+            ),
             armBack: seg(j.armBack, j.forearmBack, LIMB_R.arm, a),
-            forearmBack: seg(j.forearmBack, [j.forearmBack[0] - 6, j.forearmBack[1] + 12], LIMB_R.forearm, a),
+            forearmBack: seg(
+                j.forearmBack,
+                [j.forearmBack[0] - 6, j.forearmBack[1] + 12],
+                LIMB_R.forearm,
+                a,
+            ),
             legFront: seg(j.legFront, j.shinFront, LIMB_R.leg, l),
-            shinFront: seg(j.shinFront, [j.shinFront[0] + 2, 146], LIMB_R.shin, l),
+            shinFront: seg(
+                j.shinFront,
+                [j.shinFront[0] + 2, 146],
+                LIMB_R.shin,
+                l,
+            ),
             legBack: seg(j.legBack, j.shinBack, LIMB_R.leg, l),
             shinBack: seg(j.shinBack, [j.shinBack[0] - 2, 146], LIMB_R.shin, l),
             neck: seg(j.neck, j.head, LIMB_R.neck, a),
@@ -941,10 +1003,12 @@ git commit -m "feat(mcat): parametric tapered-capsule body geometry with bulk ax
 ### Task 6: Roster + tier mapping (`ring/roster.ts`)
 
 **Files:**
+
 - Create: `ts/routes/mcat/ring/roster.ts`
 - Test: `ts/routes/mcat/ring/roster.test.ts`
 
 **Interfaces:**
+
 - Consumes: `hashId` from `./rng`, `BUILD_BULK` from `./geometry`, `McatStudyItem` fields from Task 1.
 - Produces:
   - Types: `Species` (`"rookie" | "sidewinder" | "hobnail" | "howler" | "gravel" | "bullhorn" | "chiron"`), `Build`, `Tier` (1–6), `Palette { skin; trunks; glove; accent; fur? }`, `SpeciesSpec { id; name; chassis: "biped" | "taur"; build: Build; headPath: string; extraPaths: string[]; palettes: Palette[]; hitSfx: string; amp: number; wt: number }`, `OpponentInstance { species: SpeciesSpec; tier: Tier; scale: number; bulk: number; paletteIndex: number }`.
@@ -960,29 +1024,45 @@ git commit -m "feat(mcat): parametric tapered-capsule body geometry with bulk ax
 ```ts
 import { expect, test } from "vitest";
 
-import { heroBulk, opponentFor, SPECIES, tierFor, tierFromMastery } from "./roster";
+import {
+    heroBulk,
+    opponentFor,
+    SPECIES,
+    tierFor,
+    tierFromMastery,
+} from "./roster";
 
 test("tierFor follows the spec formula", () => {
-    expect(tierFor(3, 0, true)).toBe(3);          // untagged fsrs -> authored
-    expect(tierFor(5, 8.0, true)).toBe(6);        // authored 5 + brutal -> centaur
+    expect(tierFor(3, 0, true)).toBe(3); // untagged fsrs -> authored
+    expect(tierFor(5, 8.0, true)).toBe(6); // authored 5 + brutal -> centaur
     expect(tierFor(5, 5.0, true)).toBe(5);
-    expect(tierFor(2, 2.0, true)).toBe(1);        // easy for you -> -1
-    expect(tierFor(3, 9.9, false)).toBe(6);       // untagged: fsrs-only base 5, +1 mod
+    expect(tierFor(2, 2.0, true)).toBe(1); // easy for you -> -1
+    expect(tierFor(3, 9.9, false)).toBe(6); // untagged: fsrs-only base 5, +1 mod
     expect(tierFor(1, 0, false)).toBe(1);
 });
 
 test("opponent identity is deterministic and tier is frozen per session", () => {
     const cache = new Map<string, Tier>();
-    const item = { cardId: 999n, difficulty: 4, fsrsDifficulty: 0, difficultyTagged: true };
+    const item = {
+        cardId: 999n,
+        difficulty: 4,
+        fsrsDifficulty: 0,
+        difficultyTagged: true,
+    };
     const a = opponentFor(item, cache);
     const b = opponentFor({ ...item, fsrsDifficulty: 9.9 }, cache); // fsrs moved mid-session
-    expect(a.species.id).toBe(b.species.id);      // frozen
+    expect(a.species.id).toBe(b.species.id); // frozen
     expect(a.paletteIndex).toBe(b.paletteIndex);
 });
 
 test("tier 5 is the minotaur, tier 6 falls back to bullhorn in wave 1", () => {
     const cache = new Map<string, Tier>();
-    const t5 = opponentFor({ cardId: 1n, difficulty: 5, fsrsDifficulty: 5, difficultyTagged: true }, cache);
+    const t5 = opponentFor({
+        cardId: 1n,
+        difficulty: 5,
+        fsrsDifficulty: 5,
+        difficultyTagged: true,
+    }, cache);
     expect(t5.species.id).toBe("bullhorn");
 });
 
@@ -1014,7 +1094,13 @@ import { BUILD_BULK } from "./geometry";
 import { hashId } from "./rng";
 
 export type Species =
-    | "rookie" | "sidewinder" | "hobnail" | "howler" | "gravel" | "bullhorn" | "chiron";
+    | "rookie"
+    | "sidewinder"
+    | "hobnail"
+    | "howler"
+    | "gravel"
+    | "bullhorn"
+    | "chiron";
 export type Build = keyof typeof BUILD_BULK;
 export type Chassis = "biped" | "taur";
 export type Tier = 1 | 2 | 3 | 4 | 5 | 6;
@@ -1052,96 +1138,221 @@ export interface OpponentInstance {
    All paths live in the 120x150 viewBox, heads centered near (62,40). */
 export const SPECIES: Record<Species, SpeciesSpec> = {
     rookie: {
-        id: "rookie", name: "ROOKIE", chassis: "biped", build: "lean",
+        id: "rookie",
+        name: "ROOKIE",
+        chassis: "biped",
+        build: "lean",
         headPath: "M 52 30 A 11 11 0 1 1 52 52 A 12 13 0 0 1 52 30 Z",
         extraPaths: ["M 50 28 A 13 13 0 0 1 76 32 L 72 40 A 9 9 0 0 0 54 38 Z"], // headgear dome
         palettes: [
-            { skin: "#c9a181", trunks: "#3d4657", glove: "#4a5262", accent: "#566073" },
-            { skin: "#a9846a", trunks: "#42556a", glove: "#4a5262", accent: "#5d6b80" },
+            {
+                skin: "#c9a181",
+                trunks: "#3d4657",
+                glove: "#4a5262",
+                accent: "#566073",
+            },
+            {
+                skin: "#a9846a",
+                trunks: "#42556a",
+                glove: "#4a5262",
+                accent: "#5d6b80",
+            },
         ],
-        hitSfx: "BAP!", amp: 1.15, wt: 0.9,
+        hitSfx: "BAP!",
+        amp: 1.15,
+        wt: 0.9,
     },
     sidewinder: {
-        id: "sidewinder", name: "SIDEWINDER", chassis: "biped", build: "fit",
+        id: "sidewinder",
+        name: "SIDEWINDER",
+        chassis: "biped",
+        build: "fit",
         headPath: "M 50 34 Q 58 26 70 32 Q 76 38 70 48 Q 58 54 50 46 Z",
         extraPaths: ["M 58 26 L 62 14 L 66 26 Z", "M 70 40 Q 78 40 80 44"], // crest fin + snout hint
         palettes: [
-            { skin: "#3f5c54", trunks: "#2e4a4a", glove: "#37504e", accent: "#5f7a72" },
-            { skin: "#46584f", trunks: "#33484f", glove: "#3a4f52", accent: "#67806f" },
+            {
+                skin: "#3f5c54",
+                trunks: "#2e4a4a",
+                glove: "#37504e",
+                accent: "#5f7a72",
+            },
+            {
+                skin: "#46584f",
+                trunks: "#33484f",
+                glove: "#3a4f52",
+                accent: "#67806f",
+            },
         ],
-        hitSfx: "SSAK!", amp: 1.1, wt: 0.95,
+        hitSfx: "SSAK!",
+        amp: 1.1,
+        wt: 0.95,
     },
     hobnail: {
-        id: "hobnail", name: "HOBNAIL", chassis: "biped", build: "heavy",
+        id: "hobnail",
+        name: "HOBNAIL",
+        chassis: "biped",
+        build: "heavy",
         headPath: "M 50 32 Q 62 24 74 32 Q 78 42 72 50 Q 60 56 50 48 Z",
         extraPaths: ["M 48 36 L 38 30 L 48 42 Z", "M 74 36 L 84 30 L 74 42 Z"], // ear points
         palettes: [
-            { skin: "#6a6f4e", trunks: "#3a4030", glove: "#4c523c", accent: "#7c825e" },
-            { skin: "#5e6549", trunks: "#3f4436", glove: "#50563f", accent: "#878c66" },
+            {
+                skin: "#6a6f4e",
+                trunks: "#3a4030",
+                glove: "#4c523c",
+                accent: "#7c825e",
+            },
+            {
+                skin: "#5e6549",
+                trunks: "#3f4436",
+                glove: "#50563f",
+                accent: "#878c66",
+            },
         ],
-        hitSfx: "CRACK!", amp: 0.95, wt: 1.1,
+        hitSfx: "CRACK!",
+        amp: 0.95,
+        wt: 1.1,
     },
     howler: {
-        id: "howler", name: "HOWLER", chassis: "biped", build: "heavy",
+        id: "howler",
+        name: "HOWLER",
+        chassis: "biped",
+        build: "heavy",
         headPath: "M 48 34 Q 56 26 66 30 L 80 40 Q 74 50 62 52 Q 50 50 48 42 Z",
         extraPaths: ["M 52 28 L 48 16 L 58 24 Z", "M 62 28 L 62 14 L 70 24 Z"], // ears
         palettes: [
-            { skin: "#2b2f38", trunks: "#232732", glove: "#343947", accent: "#4a4f5c", fur: "#4a4f5c" },
-            { skin: "#31353f", trunks: "#282c37", glove: "#3a3f4d", accent: "#525866", fur: "#525866" },
+            {
+                skin: "#2b2f38",
+                trunks: "#232732",
+                glove: "#343947",
+                accent: "#4a4f5c",
+                fur: "#4a4f5c",
+            },
+            {
+                skin: "#31353f",
+                trunks: "#282c37",
+                glove: "#3a3f4d",
+                accent: "#525866",
+                fur: "#525866",
+            },
         ],
-        hitSfx: "AWROO!", amp: 1.05, wt: 1.0,
+        hitSfx: "AWROO!",
+        amp: 1.05,
+        wt: 1.0,
     },
     gravel: {
-        id: "gravel", name: "GRAVEL", chassis: "biped", build: "colossal",
+        id: "gravel",
+        name: "GRAVEL",
+        chassis: "biped",
+        build: "colossal",
         headPath: "M 50 30 L 76 30 L 78 48 L 48 48 Z",
         extraPaths: ["M 54 34 L 60 44", "M 66 32 L 70 46"], // crack seams (accent stroke)
         palettes: [
-            { skin: "#33363d", trunks: "#2a2d33", glove: "#3d4148", accent: "#a3121c" },
-            { skin: "#383b42", trunks: "#2e3138", glove: "#42464e", accent: "#8c1019" },
+            {
+                skin: "#33363d",
+                trunks: "#2a2d33",
+                glove: "#3d4148",
+                accent: "#a3121c",
+            },
+            {
+                skin: "#383b42",
+                trunks: "#2e3138",
+                glove: "#42464e",
+                accent: "#8c1019",
+            },
         ],
-        hitSfx: "THOOM!", amp: 0.8, wt: 1.25,
+        hitSfx: "THOOM!",
+        amp: 0.8,
+        wt: 1.25,
     },
     bullhorn: {
-        id: "bullhorn", name: "BULLHORN", chassis: "biped", build: "colossal",
-        headPath: "M 50 32 Q 62 22 74 32 Q 78 44 70 52 L 66 56 Q 62 58 58 56 L 54 52 Q 46 44 50 32 Z",
+        id: "bullhorn",
+        name: "BULLHORN",
+        chassis: "biped",
+        build: "colossal",
+        headPath:
+            "M 50 32 Q 62 22 74 32 Q 78 44 70 52 L 66 56 Q 62 58 58 56 L 54 52 Q 46 44 50 32 Z",
         extraPaths: [
             "M 50 32 Q 36 26 32 14 Q 44 18 52 26 Z", // left horn
             "M 74 32 Q 88 26 92 14 Q 80 18 72 26 Z", // right horn
-            "M 58 50 Q 62 54 66 50",                  // snout ring line
+            "M 58 50 Q 62 54 66 50", // snout ring line
         ],
         palettes: [
-            { skin: "#262223", trunks: "#1d1a1b", glove: "#3a3336", accent: "#8a6d2f" },
-            { skin: "#2c2628", trunks: "#221e20", glove: "#413a3d", accent: "#9b7c38" },
+            {
+                skin: "#262223",
+                trunks: "#1d1a1b",
+                glove: "#3a3336",
+                accent: "#8a6d2f",
+            },
+            {
+                skin: "#2c2628",
+                trunks: "#221e20",
+                glove: "#413a3d",
+                accent: "#9b7c38",
+            },
         ],
-        hitSfx: "THUD!", amp: 0.8, wt: 1.25,
+        hitSfx: "THUD!",
+        amp: 0.8,
+        wt: 1.25,
     },
     chiron: {
-        id: "chiron", name: "CHIRON, WARLORD", chassis: "taur", build: "colossal",
+        id: "chiron",
+        name: "CHIRON, WARLORD",
+        chassis: "taur",
+        build: "colossal",
         headPath: "M 52 30 Q 62 22 72 30 Q 76 40 70 48 Q 60 54 52 46 Z",
         extraPaths: ["M 56 26 Q 50 12 60 8 Q 58 20 64 26 Z"], // war crest/mane
         palettes: [
-            { skin: "#3a2d26", trunks: "#2b211c", glove: "#4a3a30", accent: "#a3121c" },
-            { skin: "#41332b", trunks: "#302620", glove: "#524139", accent: "#8c1019" },
+            {
+                skin: "#3a2d26",
+                trunks: "#2b211c",
+                glove: "#4a3a30",
+                accent: "#a3121c",
+            },
+            {
+                skin: "#41332b",
+                trunks: "#302620",
+                glove: "#524139",
+                accent: "#8c1019",
+            },
         ],
-        hitSfx: "BOOM!", amp: 0.85, wt: 1.2,
+        hitSfx: "BOOM!",
+        amp: 0.85,
+        wt: 1.2,
     },
 };
 
 export const TIER_SPECIES: Record<Tier, Species[]> = {
-    1: ["rookie"], 2: ["sidewinder"], 3: ["hobnail"],
-    4: ["howler", "gravel"], 5: ["bullhorn"], 6: ["chiron"],
+    1: ["rookie"],
+    2: ["sidewinder"],
+    3: ["hobnail"],
+    4: ["howler", "gravel"],
+    5: ["bullhorn"],
+    6: ["chiron"],
 };
 
 /* Wave 1 ships rookie/hobnail/bullhorn; others degrade to nearest silhouette. */
 const WAVE1_SHIPPED: Set<Species> = new Set(["rookie", "hobnail", "bullhorn"]);
 const WAVE1_FALLBACK: Record<Species, Species> = {
-    rookie: "rookie", sidewinder: "rookie", hobnail: "hobnail",
-    howler: "hobnail", gravel: "hobnail", bullhorn: "bullhorn", chiron: "bullhorn",
+    rookie: "rookie",
+    sidewinder: "rookie",
+    hobnail: "hobnail",
+    howler: "hobnail",
+    gravel: "hobnail",
+    bullhorn: "bullhorn",
+    chiron: "bullhorn",
 };
 
-const TIER_SCALE: Record<Tier, number> = { 1: 0.9, 2: 0.98, 3: 1.06, 4: 1.16, 5: 1.28, 6: 1.35 };
+const TIER_SCALE: Record<Tier, number> = {
+    1: 0.9,
+    2: 0.98,
+    3: 1.06,
+    4: 1.16,
+    5: 1.28,
+    6: 1.35,
+};
 
-const clamp = (n: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, n));
+const clamp = (n: number, lo: number, hi: number): number =>
+    Math.max(lo, Math.min(hi, n));
 
 export function tierFor(authored: number, fsrs: number, tagged: boolean): Tier {
     const base = tagged || fsrs === 0
@@ -1152,18 +1363,28 @@ export function tierFor(authored: number, fsrs: number, tagged: boolean): Tier {
 }
 
 export function opponentFor(
-    item: { cardId: bigint; difficulty: number; fsrsDifficulty: number; difficultyTagged: boolean },
+    item: {
+        cardId: bigint;
+        difficulty: number;
+        fsrsDifficulty: number;
+        difficultyTagged: boolean;
+    },
     cache: Map<string, Tier>,
 ): OpponentInstance {
     const key = String(item.cardId);
     let tier = cache.get(key);
     if (tier === undefined) {
-        tier = tierFor(item.difficulty, item.fsrsDifficulty, item.difficultyTagged);
+        tier = tierFor(
+            item.difficulty,
+            item.fsrsDifficulty,
+            item.difficultyTagged,
+        );
         cache.set(key, tier); // frozen per card per session — no mid-session thrash
     }
     const pool = TIER_SPECIES[tier];
     const pick = pool[hashId(item.cardId, 1) % pool.length];
-    const species = SPECIES[WAVE1_SHIPPED.has(pick) ? pick : WAVE1_FALLBACK[pick]];
+    const species =
+        SPECIES[WAVE1_SHIPPED.has(pick) ? pick : WAVE1_FALLBACK[pick]];
     const paletteIndex = hashId(item.cardId, 2) % species.palettes.length;
     // within-band interpolation: personally-harder cards read bulkier
     const eff = item.fsrsDifficulty > 0 ? (item.fsrsDifficulty - 5.5) / 9 : 0;
@@ -1194,10 +1415,12 @@ git commit -m "feat(mcat): opponent roster, real-difficulty tier mapping, sessio
 ### Task 7: Clip registry + choreographer reducer (`ring/clips.ts`, `ring/machine.ts`)
 
 **Files:**
+
 - Create: `ts/routes/mcat/ring/clips.ts`, `ts/routes/mcat/ring/machine.ts`
 - Test: `ts/routes/mcat/ring/machine.test.ts`
 
 **Interfaces:**
+
 - Consumes: `ShuffleBag`, `mulberry32` from `./rng`.
 - Produces:
   - `clips.ts`: `interface ClipDef { id: string; durMs: number; intensity: 1 | 2 | 3; badge?: { text: string; tone: "gold" | "steel" | "err" }; shake?: 0 | 1 | 2 | 3 }`, `const CLIPS: Record<string, ClipDef>` (every Wave-1 clip below), `const POOLS: Record<PoolName, string[]>` with `PoolName = "power" | "counter" | "heroHit" | "oppAttack" | "bag"`.
@@ -1223,8 +1446,11 @@ export interface ClipDef {
 }
 
 const c = (
-    id: string, durMs: number, intensity: 1 | 2 | 3,
-    badge?: ClipDef["badge"], shake?: ClipDef["shake"],
+    id: string,
+    durMs: number,
+    intensity: 1 | 2 | 3,
+    badge?: ClipDef["badge"],
+    shake?: ClipDef["shake"],
 ): ClipDef => ({ id, durMs, intensity, badge, shake });
 
 export const CLIPS: Record<string, ClipDef> = Object.fromEntries(
@@ -1311,7 +1537,11 @@ test("reading state is structurally quiet", () => {
 });
 
 test("fast-correct schedules hero strike then matched opponent react", () => {
-    const m = reduce(initialModel("spar"), { kind: "fast-correct", trigger: 1 }, pools());
+    const m = reduce(
+        initialModel("spar"),
+        { kind: "fast-correct", trigger: 1 },
+        pools(),
+    );
     const hero = m.queue.find((q) => q.who === "hero")!;
     const opp = m.queue.find((q) => q.who === "opp")!;
     expect(hero.clip.startsWith("atk-")).toBe(true);
@@ -1320,7 +1550,11 @@ test("fast-correct schedules hero strike then matched opponent react", () => {
 });
 
 test("wrong schedules opponent telegraph then hero hit", () => {
-    const m = reduce(initialModel("spar"), { kind: "wrong", trigger: 1 }, pools());
+    const m = reduce(
+        initialModel("spar"),
+        { kind: "wrong", trigger: 1 },
+        pools(),
+    );
     const opp = m.queue.find((q) => q.who === "opp")!;
     const hero = m.queue.find((q) => q.who === "hero")!;
     expect(opp.atMs).toBe(0);
@@ -1331,12 +1565,18 @@ test("wrong schedules opponent telegraph then hero hit", () => {
 test("bag mode reacts identically for every answer (no leak)", () => {
     const p = pools();
     const a = reduce(initialModel("bag"), { kind: "bag-hit", trigger: 1 }, p);
-    expect(a.queue.every((q) => q.who === "hero" || q.who === "bag")).toBe(true);
+    expect(a.queue.every((q) => q.who === "hero" || q.who === "bag")).toBe(
+        true,
+    );
     expect(a.badge?.tone).toBe("gold"); // same tone regardless of correctness
 });
 
 test("a new event replaces the queue (no pile-up behind a fast student)", () => {
-    let m = reduce(initialModel("spar"), { kind: "wrong", trigger: 1 }, pools());
+    let m = reduce(
+        initialModel("spar"),
+        { kind: "wrong", trigger: 1 },
+        pools(),
+    );
     const before = m.queue;
     m = reduce(m, { kind: "fast-correct", trigger: 2 }, pools());
     expect(m.queue).not.toEqual(before);
@@ -1348,16 +1588,24 @@ test("a new event replaces the queue (no pile-up behind a fast student)", () => 
 - [ ] **Step 4: Implement `machine.ts`:**
 
 ```ts
-import { CLIPS, MATCHED_REACT, POOLS, type PoolName } from "./clips";
+import { CLIPS, MATCHED_REACT, type PoolName, POOLS } from "./clips";
 import { mulberry32, ShuffleBag } from "./rng";
 
 export type RingStatus = "reading" | "feedback" | "results";
 export type FightEventKind =
     | "question"
-    | "fast-correct" | "slow-correct" | "wrong" | "idk"
-    | "rate-again" | "rate-hard" | "rate-good" | "rate-easy"
+    | "fast-correct"
+    | "slow-correct"
+    | "wrong"
+    | "idk"
+    | "rate-again"
+    | "rate-hard"
+    | "rate-good"
+    | "rate-easy"
     | "bag-hit"
-    | "results-win" | "results-draw" | "results-loss";
+    | "results-win"
+    | "results-draw"
+    | "results-loss";
 
 export interface FightEvent {
     kind: FightEventKind;
@@ -1380,7 +1628,9 @@ export interface RingModel {
 export function makePools(seed: number): { next(pool: PoolName): string } {
     const rng = mulberry32(seed);
     const bags = Object.fromEntries(
-        (Object.keys(POOLS) as PoolName[]).map((k) => [k, new ShuffleBag(POOLS[k], rng)]),
+        (Object.keys(POOLS) as PoolName[]).map((
+            k,
+        ) => [k, new ShuffleBag(POOLS[k], rng)]),
     ) as Record<PoolName, ShuffleBag<string>>;
     return { next: (pool) => bags[pool].next() };
 }
@@ -1409,18 +1659,28 @@ export function reduce(
         case "question": {
             // STRUCTURAL guarantee: reading holds no queue and only intensity-1 stances.
             next.status = "reading";
-            next.heroStance = quiet(model.heroStance === "stance-jumprope" ? "stance-jumprope" : "stance-guard");
+            next.heroStance = quiet(
+                model.heroStance === "stance-jumprope"
+                    ? "stance-jumprope"
+                    : "stance-guard",
+            );
             next.oppStance = "stance-guard";
             return next;
         }
         case "fast-correct":
         case "slow-correct": {
-            const strike = pools.next(ev.kind === "fast-correct" ? "power" : "counter");
+            const strike = pools.next(
+                ev.kind === "fast-correct" ? "power" : "counter",
+            );
             next.status = "feedback";
             next.heroStance = "stance-bounce";
             next.queue = [
                 { who: "hero", clip: strike, atMs: 0 },
-                { who: "opp", clip: MATCHED_REACT[strike] ?? "opp-hit-head-snap", atMs: 180 },
+                {
+                    who: "opp",
+                    clip: MATCHED_REACT[strike] ?? "opp-hit-head-snap",
+                    atMs: 180,
+                },
             ];
             next.badge = CLIPS[strike].badge ?? null;
             next.shake = CLIPS[strike].shake ?? 0;
@@ -1516,10 +1776,12 @@ git commit -m "feat(mcat): clip registry and pure-reducer ring choreographer"
 ### Task 8: FighterRig skeleton + Wave-0 spikes + dev gallery
 
 **Files:**
+
 - Create: `ts/routes/mcat/ring/FighterRig.svelte`, `ts/routes/mcat/ring/grammar.scss`
 - Create: `ts/routes/mcat/gallery/+page.svelte`, `ts/routes/mcat/gallery/+page.ts`
 
 **Interfaces:**
+
 - Consumes: `bodyPaths`, `joints`, `BUILD_BULK` (geometry), `SpeciesSpec`, `Palette` (roster).
 - Produces: `FighterRig.svelte` props: `export let spec: SpeciesSpec; export let bulk = 0; export let paletteIndex = 0; export let facing: "right" | "left" = "right"; export let scale = 1; export let stance = "stance-guard"; export let clip: string | null = null; export let clipTrigger = 0; export let staticPose: string | null = null;` — dispatches `clipend` when a one-shot finishes. Skeleton `<g>` class names (the clip-authoring contract for Task 9): `.rig`, `.pelvis`, `.spine`, `.chest`, `.neck`, `.head`, `.arm.front`, `.forearm.front`, `.glove.front`, `.arm.back`, `.forearm.back`, `.glove.back`, `.leg.front`, `.shin.front`, `.leg.back`, `.shin.back`, `.muscle`, `.shadow`.
 
@@ -1818,10 +2080,12 @@ git commit -m "feat(mcat): articulated SVG fighter rig, guard stance, dev galler
 ### Task 9: Wave-1 clip library + HeavyBag + RingFx
 
 **Files:**
+
 - Modify: `ts/routes/mcat/ring/FighterRig.svelte` (style block — add all clips)
 - Create: `ts/routes/mcat/ring/HeavyBag.svelte`, `ts/routes/mcat/ring/RingFx.svelte`
 
 **Interfaces:**
+
 - Consumes: skeleton class names from Task 8; `ClipDef` ids from Task 7 (every CLIPS id must have a matching CSS class here, minus the `opp-` prefix: opponent clips reuse hero keyframes where listed).
 - Produces: `HeavyBag.svelte` props `export let swing: string | null = null; export let swingTrigger = 0;` (classes `swing-bag-jab`, `swing-bag-cross`, `swing-bag-hook`, `swing-bag-uppercut`, idle sway). `RingFx.svelte` props `export let badge: { text: string; tone: "gold" | "steel" | "err" } | null = null; export let badgeTrigger = 0;` renders the pop badge; star/dust are emitted via `export let impact: { x: number; y: number } | null = null` (Wave 1: fixed impact point per side is fine).
 
@@ -1887,28 +2151,28 @@ git commit -m "feat(mcat): articulated SVG fighter rig, guard stance, dev galler
 
 Author the remaining clips with the same structure using these joint targets (all rotations get `calc(var(--amp,1) * …)`; all durations get the `oneshot()` `--wt` multiplier automatically):
 
-| Clip | Duration | Anticipation (18%) | Contact (38–50%) | Notes |
-|---|---|---|---|---|
-| `atk-uppercut` | 620ms | root `translateY(4px)`, spine `rotate(8deg)` | root `translateY(-5px)`, spine `rotate(-6deg)`, arm.front `rotate(96deg)`→`rotate(-88deg)` rising | glove.front squash at contact |
-| `atk-hook` | 580ms | spine `rotate(-7deg)`, arm.front winds `rotate(-80deg)` | spine `rotate(9deg)`, arm.front sweeps to `rotate(-20deg)`, forearm.front `rotate(-70deg)` | horizontal arc; add 2-frame smear: a `path.smear` in the front-glove group, `opacity 0→0.4→0` at 34–42% |
-| `ctr-slip-jab` | 640ms | root `translateX(-6px) translateY(3px)`, spine `rotate(-10deg)` (the slip) | arm.front extends `rotate(-84deg)`, forearm.front `rotate(0)` | slip first, then jab — reads "won on points" |
-| `ctr-block-hook` | 700ms | both forearms raise (`rotate(-95deg)`/`rotate(95deg)`) guard 0–30% | then hook contact at 55–65% | two-beat clip: absorb → answer |
-| `hit-head-snap` | 480ms | — | head `rotate(-22deg)` + neck `rotate(-8deg)` at 15–25%, root `translateX(-7px)` | recover with settle ease; add `.flash` opacity pulse (port from old BoxerFigure) |
-| `hit-gut-fold` | 560ms | — | spine `rotate(18deg)` fold + root `translateY(3px)` at 20–32% | arms drop slightly |
-| `hit-stagger` | 640ms | — | root steps back `translateX(-4px)` / `-8px` / `-11px` at 20/45/70% with `rotate(-3deg)` wobble | three discrete stumble beats |
-| `def-step-back` | 600ms | — | root `translateX(-9px)` hop at 30%, front glove raised `rotate(-70deg)` held 30–80% | deliberate, upright — not a flinch |
-| `opp-atk-jab` | 420ms | 0–52% telegraph: arm.front winds `rotate(24deg)` slowly | contact at 62–74% | telegraph IS the first half (hero hit lands at +220ms) |
-| `opp-atk-cross` | 520ms | 0–45% telegraph: spine `rotate(8deg)` | contact 55–70% | |
-| `opp-hit-stagger-ropes` | 640ms | — | root `translateX(10px)` into ropes at 30%, `rotate(6deg)`, rebound `translateX(4px)` at 70% | ring ropes flex is faked ring-side (skip in Wave 1) |
-| `opp-block` | 500ms | — | both forearms to guard 25–75% | |
-| `opp-taunt-respect-nod` | 700ms | — | head `rotate(10deg)` dip 30–60%, glove.front tap chest 40% | used for IDK + draw |
-| `win-arms-up` | 1200ms | crouch `translateY(4px)` 0–15% | both arms `rotate(-150deg)`/`rotate(150deg)` up 30–100%, two small hops at 40/70% | badge none; confetti deferred to Wave 2 |
-| `draw-glove-touch` | 900ms | — | front glove extends to center 35–65%, head nod | |
-| `loss-towel-nod` | 1100ms | — | head drops `rotate(14deg)` 20–50%, then back to guard 80–100% | determined, not humiliated |
-| `stance-bounce` (loop) | 1800ms | — | `translateY` 0→-3px→0 with alternating `pelvis rotate(±2deg)` weight shifts | intensity 2: feedback state only |
-| `stance-spent` (loop) | 3200ms | — | guard pose + `translateY` 0→-1px, shoulders dropped (chest `rotate(3deg)`) | intensity 1 |
-| `stance-jumprope` (loop) | 520ms | — | port the old hop + rope from BoxerFigure.svelte:188-216 onto the rig (rope = ellipse toggled by class) | intensity 1 |
-| `bag-jab/cross/hook/uppercut` | per clips.ts | reuse the matching `atk-*`/`ctr-*` keyframes via `animation-name` | | hero-only; bag swings live in HeavyBag |
+| Clip                          | Duration     | Anticipation (18%)                                                         | Contact (38–50%)                                                                                       | Notes                                                                                                   |
+| ----------------------------- | ------------ | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `atk-uppercut`                | 620ms        | root `translateY(4px)`, spine `rotate(8deg)`                               | root `translateY(-5px)`, spine `rotate(-6deg)`, arm.front `rotate(96deg)`→`rotate(-88deg)` rising      | glove.front squash at contact                                                                           |
+| `atk-hook`                    | 580ms        | spine `rotate(-7deg)`, arm.front winds `rotate(-80deg)`                    | spine `rotate(9deg)`, arm.front sweeps to `rotate(-20deg)`, forearm.front `rotate(-70deg)`             | horizontal arc; add 2-frame smear: a `path.smear` in the front-glove group, `opacity 0→0.4→0` at 34–42% |
+| `ctr-slip-jab`                | 640ms        | root `translateX(-6px) translateY(3px)`, spine `rotate(-10deg)` (the slip) | arm.front extends `rotate(-84deg)`, forearm.front `rotate(0)`                                          | slip first, then jab — reads "won on points"                                                            |
+| `ctr-block-hook`              | 700ms        | both forearms raise (`rotate(-95deg)`/`rotate(95deg)`) guard 0–30%         | then hook contact at 55–65%                                                                            | two-beat clip: absorb → answer                                                                          |
+| `hit-head-snap`               | 480ms        | —                                                                          | head `rotate(-22deg)` + neck `rotate(-8deg)` at 15–25%, root `translateX(-7px)`                        | recover with settle ease; add `.flash` opacity pulse (port from old BoxerFigure)                        |
+| `hit-gut-fold`                | 560ms        | —                                                                          | spine `rotate(18deg)` fold + root `translateY(3px)` at 20–32%                                          | arms drop slightly                                                                                      |
+| `hit-stagger`                 | 640ms        | —                                                                          | root steps back `translateX(-4px)` / `-8px` / `-11px` at 20/45/70% with `rotate(-3deg)` wobble         | three discrete stumble beats                                                                            |
+| `def-step-back`               | 600ms        | —                                                                          | root `translateX(-9px)` hop at 30%, front glove raised `rotate(-70deg)` held 30–80%                    | deliberate, upright — not a flinch                                                                      |
+| `opp-atk-jab`                 | 420ms        | 0–52% telegraph: arm.front winds `rotate(24deg)` slowly                    | contact at 62–74%                                                                                      | telegraph IS the first half (hero hit lands at +220ms)                                                  |
+| `opp-atk-cross`               | 520ms        | 0–45% telegraph: spine `rotate(8deg)`                                      | contact 55–70%                                                                                         |                                                                                                         |
+| `opp-hit-stagger-ropes`       | 640ms        | —                                                                          | root `translateX(10px)` into ropes at 30%, `rotate(6deg)`, rebound `translateX(4px)` at 70%            | ring ropes flex is faked ring-side (skip in Wave 1)                                                     |
+| `opp-block`                   | 500ms        | —                                                                          | both forearms to guard 25–75%                                                                          |                                                                                                         |
+| `opp-taunt-respect-nod`       | 700ms        | —                                                                          | head `rotate(10deg)` dip 30–60%, glove.front tap chest 40%                                             | used for IDK + draw                                                                                     |
+| `win-arms-up`                 | 1200ms       | crouch `translateY(4px)` 0–15%                                             | both arms `rotate(-150deg)`/`rotate(150deg)` up 30–100%, two small hops at 40/70%                      | badge none; confetti deferred to Wave 2                                                                 |
+| `draw-glove-touch`            | 900ms        | —                                                                          | front glove extends to center 35–65%, head nod                                                         |                                                                                                         |
+| `loss-towel-nod`              | 1100ms       | —                                                                          | head drops `rotate(14deg)` 20–50%, then back to guard 80–100%                                          | determined, not humiliated                                                                              |
+| `stance-bounce` (loop)        | 1800ms       | —                                                                          | `translateY` 0→-3px→0 with alternating `pelvis rotate(±2deg)` weight shifts                            | intensity 2: feedback state only                                                                        |
+| `stance-spent` (loop)         | 3200ms       | —                                                                          | guard pose + `translateY` 0→-1px, shoulders dropped (chest `rotate(3deg)`)                             | intensity 1                                                                                             |
+| `stance-jumprope` (loop)      | 520ms        | —                                                                          | port the old hop + rope from BoxerFigure.svelte:188-216 onto the rig (rope = ellipse toggled by class) | intensity 1                                                                                             |
+| `bag-jab/cross/hook/uppercut` | per clips.ts | reuse the matching `atk-*`/`ctr-*` keyframes via `animation-name`          |                                                                                                        | hero-only; bag swings live in HeavyBag                                                                  |
 
 Opponent clips (`opp-*`) reuse hero keyframes by assigning the same `animation-name`s under `.rig.opp-…` selectors — the rig is facing-mirrored so nothing else changes.
 
@@ -2014,9 +2278,11 @@ git commit -m "feat(mcat): wave-1 clip library, heavy bag, ring fx"
 ### Task 10: FightRing (the strip)
 
 **Files:**
+
 - Create: `ts/routes/mcat/ring/FightRing.svelte`
 
 **Interfaces:**
+
 - Consumes: `FighterRig`, `HeavyBag`, `RingFx`, `machine.ts` (`initialModel`, `reduce`, `makePools`, `FightEvent`, `RingModel`), `roster.ts` (`OpponentInstance`, `SPECIES`, `heroBulk`).
 - Produces (consumed by the three pages): props `export let mode: "spar" | "train" | "bag" = "spar"; export let event: FightEvent | null = null; export let heroScale = 1; export let heroBulkValue = 0; export let opponent: OpponentInstance | null = null; export let marquee = ""; export let showPips = true; export let height = 100;` plus hide toggle persisted at localStorage `sf-boxer-hidden` (key unchanged). Hero spec: a `HERO: SpeciesSpec` export in `roster.ts` — add it there in this task (rookie-shaped, hero palette `{ skin: "#e0b088", trunks: "#c81e2c", glove: "#e11d2f", accent: "#f5c451" }`, name "YOU", amp 1.0, wt 1.0).
 
@@ -2219,9 +2485,11 @@ git commit -m "feat(mcat): FightRing strip with reducer-driven exchanges"
 ### Task 11: StudyPage rewrite
 
 **Files:**
+
 - Modify: `ts/routes/mcat/study/StudyPage.svelte` (full rewrite)
 
 **Interfaces:**
+
 - Consumes: `SessionHeader`, `QuestionCard`, `ChoiceGrid`, `IdkButton`, `KeyHint` (lib), `FightRing` + `FightEvent` (ring), `opponentFor`, `heroBulk` (roster), item fields from Task 1.
 - Produces: same external contract as today (`export let items: McatStudyItem[]; export let readinessPct = 50;`).
 
@@ -2275,9 +2543,17 @@ $: done = index >= items.length;
 $: correct = chosen !== null && item !== undefined && chosen === item.answer;
 $: opponent = item && isMcq ? opponentFor(item, tierCache) : null;
 $: heroScale = 0.9 + Math.max(0, Math.min(100, readinessPct)) / 100 * 0.3;
-$: marquee = item ? `${item.leafId} · ${item.leafName}${opponent ? `  vs ${opponent.species.name} · TIER ${opponent.tier}` : ""}` : "";
+$: marquee = item
+    ? `${item.leafId} · ${item.leafName}${
+        opponent ? `  vs ${opponent.species.name} · TIER ${opponent.tier}` : ""
+    }`
+    : "";
 $: elapsed = Math.max(0, now - startedAt);
-$: timerText = timerHidden ? "" : `${Math.floor(elapsed / 60000)}:${String(Math.floor(elapsed / 1000) % 60).padStart(2, "0")}`;
+$: timerText = timerHidden
+    ? ""
+    : `${Math.floor(elapsed / 60000)}:${
+        String(Math.floor(elapsed / 1000) % 60).padStart(2, "0")
+    }`;
 $: paceState = elapsed <= FAST_MS ? "gold" : "steel";
 
 let lastStanceIndex = -1;
@@ -2379,9 +2655,11 @@ git commit -m "feat(mcat): study page rewrite — stable layout, graded chips, r
 ### Task 12: Dashboard rewrite
 
 **Files:**
+
 - Modify: `ts/routes/mcat/McatDashboard.svelte`
 
 **Interfaces:**
+
 - Consumes: `MeterBar` (lib), `FighterRig` + `SPECIES`, `TIER_SPECIES`, `tierFromMastery` (ring/roster), existing `recomputeMcatLeafStates`, `resetMcatProgress`.
 - Produces: no interface changes (`export let readiness` unchanged).
 
@@ -2392,7 +2670,10 @@ git commit -m "feat(mcat): study page rewrite — stable layout, graded chips, r
 ```ts
 $: weakest = readiness.leaves
     .filter((l) => l.assessed)
-    .map((l) => ({ leaf: l, weakness: 1 - l.fluency * 0.6 - l.application * 0.4 }))
+    .map((l) => ({
+        leaf: l,
+        weakness: 1 - l.fluency * 0.6 - l.application * 0.4,
+    }))
     .sort((a, b) => b.weakness - a.weakness)
     .slice(0, 3);
 ```
@@ -2438,10 +2719,12 @@ git commit -m "feat(mcat): dashboard — next-opponents fight cards, quieter sco
 ### Task 13: Diagnostic rewrite + old component removal
 
 **Files:**
+
 - Modify: `ts/routes/mcat/diagnostic/DiagnosticPage.svelte`, `ts/routes/mcat/diagnostic/+page.ts`, `ts/routes/mcat/diagnostic/+page.svelte`
 - Delete: `ts/routes/mcat/Boxer.svelte`, `ts/routes/mcat/BoxerFigure.svelte`, `ts/routes/mcat/boxer.ts`
 
 **Interfaces:**
+
 - Consumes: lib primitives, `FightRing`, `FightEvent`; `computeMcatReadiness` from `@generated/backend`.
 - Produces: `+page.ts` now returns `{ diagnostic, before }` where `before` is the pre-exam `McatReadinessResponse`; `DiagnosticPage.svelte` gains `export let before: McatReadinessResponse | null = null;` (wired in `+page.svelte`).
 
@@ -2481,6 +2764,7 @@ git commit -m "feat(mcat): diagnostic two-step commit, readiness delta results; 
 ### Task 14: E2E smoke + final gate
 
 **Files:**
+
 - Create: `ts/tests/e2e/mcat.test.ts`
 
 - [ ] **Step 1: Write the smoke test** (mirrors `sanity.test.ts` conventions):

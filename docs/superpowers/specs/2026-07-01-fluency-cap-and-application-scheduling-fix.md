@@ -83,6 +83,7 @@ APP_RESERVE_FRAC  = 1/3
 ## Tests
 
 New (all failed before the fix, TDD):
+
 - `aggregate::mid_speed_recalls_earn_partial_automaticity` (was 0.65 ceiling)
 - `aggregate::strong_application_lifts_fluency_above_the_floor` (was 0.8 pin)
 - `aggregate::weak_demonstrated_application_keeps_the_fluency_floor` (floor guard)

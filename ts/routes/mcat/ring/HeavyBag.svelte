@@ -76,7 +76,11 @@ Boxer.svelte bag — the keyframe values already read well.
         left: 3px;
         right: 3px;
         height: 2px;
-        background: repeating-linear-gradient(90deg, rgb(0 0 0 / 45%) 0 3px, transparent 3px 6px);
+        background: repeating-linear-gradient(
+            90deg,
+            rgb(0 0 0 / 45%) 0 3px,
+            transparent 3px 6px
+        );
     }
     .bag::before {
         top: 40%;

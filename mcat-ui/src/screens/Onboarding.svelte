@@ -46,7 +46,7 @@
                     We measure <b>fluency</b>
                     (fast, durable recall) and
                     <b>application</b>
-                     (novel problems) separately.
+                    (novel problems) separately.
                 </li>
                 <li>
                     Questions you likely can't answer yet are shown on purpose — that

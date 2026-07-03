@@ -13,7 +13,13 @@ turn FightEvents into scheduled clips, then plays them out on timers.
     import FighterRig from "./FighterRig.svelte";
     import HeavyBag from "./HeavyBag.svelte";
     import RingFx from "./RingFx.svelte";
-    import { type FightEvent, initialModel, makePools, reduce, type RingModel } from "./machine";
+    import {
+        type FightEvent,
+        initialModel,
+        makePools,
+        reduce,
+        type RingModel,
+    } from "./machine";
     import { HERO, type OpponentInstance } from "./roster";
 
     export let mode: "spar" | "train" | "bag" = "spar";
@@ -25,7 +31,9 @@ turn FightEvents into scheduled clips, then plays them out on timers.
     export let showPips = true;
     export let height = 100;
 
-    const pools = makePools(((globalThis.crypto?.getRandomValues(new Uint32Array(1))?.[0]) ?? 12345) >>> 0);
+    const pools = makePools(
+        (globalThis.crypto?.getRandomValues(new Uint32Array(1))?.[0] ?? 12345) >>> 0,
+    );
 
     let model: RingModel = initialModel(mode);
 
@@ -94,7 +102,12 @@ turn FightEvents into scheduled clips, then plays them out on timers.
     </div>
 {:else}
     <div class="sf-ring" style="height:{height}px">
-        <svg class="dressing" viewBox="0 0 700 110" preserveAspectRatio="none" aria-hidden="true">
+        <svg
+            class="dressing"
+            viewBox="0 0 700 110"
+            preserveAspectRatio="none"
+            aria-hidden="true"
+        >
             <defs>
                 <radialGradient id="sf-ring-spot" cx="50%" cy="-10%" r="95%">
                     <stop offset="0" stop-color="#2e2216" />
@@ -130,8 +143,27 @@ turn FightEvents into scheduled clips, then plays them out on timers.
                 <circle cx="620" cy="4" r="9" fill="#8fb6ff" />
             </g>
             <rect y="52" width="700" height="58" fill="url(#sf-ring-floor)" />
-            <circle cx="350" cy="82" r="20" fill="none" stroke="#f5c451" stroke-width="1.2" opacity="0.22" />
-            <text x="350" y="89" text-anchor="middle" font-family="Georgia, serif" font-size="18" fill="#f5c451" opacity="0.2" font-weight="700">S</text>
+            <circle
+                cx="350"
+                cy="82"
+                r="20"
+                fill="none"
+                stroke="#f5c451"
+                stroke-width="1.2"
+                opacity="0.22"
+            />
+            <text
+                x="350"
+                y="89"
+                text-anchor="middle"
+                font-family="Georgia, serif"
+                font-size="18"
+                fill="#f5c451"
+                opacity="0.2"
+                font-weight="700"
+            >
+                S
+            </text>
             <g stroke="#232834" stroke-width="1" opacity="0.5">
                 <line x1="0" y1="62" x2="700" y2="62" />
                 <line x1="0" y1="74" x2="700" y2="74" />
@@ -139,20 +171,57 @@ turn FightEvents into scheduled clips, then plays them out on timers.
                 <line x1="0" y1="98" x2="700" y2="98" />
             </g>
             <ellipse cx="350" cy="66" rx="260" ry="16" fill="#f5c451" opacity="0.09" />
-            <rect x="14" y="6" width="10" height="96" rx="4" fill="url(#sf-ring-post)" />
-            <rect x="676" y="6" width="10" height="96" rx="4" fill="url(#sf-ring-post)" />
+            <rect
+                x="14"
+                y="6"
+                width="10"
+                height="96"
+                rx="4"
+                fill="url(#sf-ring-post)"
+            />
+            <rect
+                x="676"
+                y="6"
+                width="10"
+                height="96"
+                rx="4"
+                fill="url(#sf-ring-post)"
+            />
             <circle cx="19" cy="8" r="8" fill="url(#sf-ring-rope-gold)" />
             <circle cx="681" cy="8" r="8" fill="url(#sf-ring-rope-gold)" />
-            <path d="M14,20 Q350,32 686,20" fill="none" stroke="url(#sf-ring-rope-gold)" stroke-width="6" stroke-linecap="round" />
-            <path d="M14,38 Q350,52 686,38" fill="none" stroke="url(#sf-ring-rope-red)" stroke-width="6" stroke-linecap="round" />
-            <path d="M14,56 Q350,70 686,56" fill="none" stroke="url(#sf-ring-rope-gold)" stroke-width="6" stroke-linecap="round" />
+            <path
+                d="M14,20 Q350,32 686,20"
+                fill="none"
+                stroke="url(#sf-ring-rope-gold)"
+                stroke-width="6"
+                stroke-linecap="round"
+            />
+            <path
+                d="M14,38 Q350,52 686,38"
+                fill="none"
+                stroke="url(#sf-ring-rope-red)"
+                stroke-width="6"
+                stroke-linecap="round"
+            />
+            <path
+                d="M14,56 Q350,70 686,56"
+                fill="none"
+                stroke="url(#sf-ring-rope-gold)"
+                stroke-width="6"
+                stroke-linecap="round"
+            />
         </svg>
         <button class="sf-hide" on:click={toggle} title="Hide the ring">✕</button>
 
         {#if marquee}
             <div class="marquee">
                 {marquee}
-                {#if showPips && pips}<span class="pips" title="Difficulty tier {opponent?.tier}/6">{pips}</span>{/if}
+                {#if showPips && pips}<span
+                        class="pips"
+                        title="Difficulty tier {opponent?.tier}/6"
+                    >
+                        {pips}
+                    </span>{/if}
             </div>
         {/if}
 
@@ -206,10 +275,16 @@ turn FightEvents into scheduled clips, then plays them out on timers.
         border-radius: var(--sf-r-lg);
         overflow: hidden;
         background:
-            radial-gradient(130% 96% at 50% -24%, rgba(245, 196, 81, 0.1), transparent 55%),
+            radial-gradient(
+                130% 96% at 50% -24%,
+                rgba(245, 196, 81, 0.1),
+                transparent 55%
+            ),
             linear-gradient(180deg, #10131a 0%, #0b0e14 100%);
         border: 1px solid var(--sf-border);
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), var(--sf-shadow-2);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.03),
+            var(--sf-shadow-2);
     }
     .dressing {
         position: absolute;

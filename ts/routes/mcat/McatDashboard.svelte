@@ -92,6 +92,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     $: sections = groupBySection(readiness.leaves);
     $: assessedCount = readiness.leaves.filter((l) => l.assessed).length;
+    $: diagnosticDone = assessedCount > 0;
 </script>
 
 <svelte:window on:keydown={onWindowKeydown} on:click={onWindowClick} />
@@ -130,8 +131,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 </span>
             </div>
             <p class="rough-note">
-                Estimate is rough — you've assessed {pct(readiness.coverage)} of the
-                blueprint.
+                Estimate is rough — you've assessed {pct(readiness.coverage)} of the blueprint.
                 {#if refreshing}<span class="refreshing-note">refreshing…</span>{/if}
             </p>
             <details class="conf-details">
@@ -159,12 +159,20 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             </div>
         </div>
         <div class="actions">
-            <button class="primary" on:click={() => goto("/mcat/study")}>
+            <button
+                class="primary"
+                disabled={!diagnosticDone}
+                title={diagnosticDone ? undefined : "Complete a diagnostic first"}
+                on:click={() => goto("/mcat/study")}
+            >
                 Study now
             </button>
             <button class="secondary" on:click={() => goto("/mcat/diagnostic")}>
                 Take diagnostic
             </button>
+            {#if !diagnosticDone}
+                <p class="locked-hint">Take the diagnostic to unlock Study.</p>
+            {/if}
         </div>
     </header>
 
@@ -189,10 +197,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 <h2 id="reset-title">Reset all progress?</h2>
                 <p>
                     This permanently wipes <strong>everything you've done</strong>
-                    : your readiness score, every subtopic's fluency &amp; application,
-                    all review history, and each card's spaced-repetition schedule. Your
-                    imported questions and flashcards are kept, but you'll start
-                    completely over.
+                    : your readiness score, every subtopic's fluency &amp; application, all
+                    review history, and each card's spaced-repetition schedule. Your imported
+                    questions and flashcards are kept, but you'll start completely over.
                 </p>
                 <p class="warn">This can't be undone.</p>
                 <div class="reset-actions">
@@ -406,10 +413,23 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     .actions .primary {
         @include sf.button-primary;
+        &:disabled {
+            opacity: 0.45;
+            filter: none;
+            cursor: default;
+            box-shadow: none;
+        }
     }
 
     .actions .secondary {
         @include sf.button-secondary;
+    }
+
+    .locked-hint {
+        margin: 0;
+        font-size: 0.78rem;
+        color: var(--sf-dim);
+        text-align: right;
     }
 
     .reset-overlay {

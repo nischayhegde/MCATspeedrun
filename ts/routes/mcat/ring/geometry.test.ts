@@ -3,7 +3,15 @@
 
 import { expect, test } from "vitest";
 
-import { BUILD_BULK, bodyPaths, capsulePath, glovePath, joints, organicLimbPath, pathCommandSequence } from "./geometry";
+import {
+    bodyPaths,
+    BUILD_BULK,
+    capsulePath,
+    glovePath,
+    joints,
+    organicLimbPath,
+    pathCommandSequence,
+} from "./geometry";
 
 test("capsulePath is a closed path with two arc caps", () => {
     const p = capsulePath(0, 0, 3, 0, 20, 5);

@@ -1,16 +1,24 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import { CLIPS, MATCHED_REACT, POOLS, type PoolName } from "./clips";
+import { CLIPS, MATCHED_REACT, type PoolName, POOLS } from "./clips";
 import { mulberry32, ShuffleBag } from "./rng";
 
 export type RingStatus = "reading" | "feedback" | "results";
 export type FightEventKind =
     | "question"
-    | "fast-correct" | "slow-correct" | "wrong" | "idk"
-    | "rate-again" | "rate-hard" | "rate-good" | "rate-easy"
+    | "fast-correct"
+    | "slow-correct"
+    | "wrong"
+    | "idk"
+    | "rate-again"
+    | "rate-hard"
+    | "rate-good"
+    | "rate-easy"
     | "bag-hit"
-    | "results-win" | "results-draw" | "results-loss";
+    | "results-win"
+    | "results-draw"
+    | "results-loss";
 
 export interface FightEvent {
     kind: FightEventKind;
@@ -49,8 +57,7 @@ export function initialModel(mode: "spar" | "train" | "bag"): RingModel {
     };
 }
 
-const quiet = (stance: string): string =>
-    CLIPS[stance] && CLIPS[stance].intensity === 1 ? stance : "stance-guard";
+const quiet = (stance: string): string => CLIPS[stance] && CLIPS[stance].intensity === 1 ? stance : "stance-guard";
 
 export function reduce(
     model: RingModel,

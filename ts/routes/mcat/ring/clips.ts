@@ -10,8 +10,11 @@ export interface ClipDef {
 }
 
 const c = (
-    id: string, durMs: number, intensity: 1 | 2 | 3,
-    badge?: ClipDef["badge"], shake?: ClipDef["shake"],
+    id: string,
+    durMs: number,
+    intensity: 1 | 2 | 3,
+    badge?: ClipDef["badge"],
+    shake?: ClipDef["shake"],
 ): ClipDef => ({ id, durMs, intensity, badge, shake });
 
 export const CLIPS: Record<string, ClipDef> = Object.fromEntries(

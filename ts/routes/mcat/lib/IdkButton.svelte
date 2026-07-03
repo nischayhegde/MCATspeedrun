@@ -32,7 +32,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         opacity: 0.7;
         cursor: pointer;
         font-weight: 600;
-        transition: border-color 0.12s ease, background 0.12s ease, opacity 0.12s ease;
+        transition:
+            border-color 0.12s ease,
+            background 0.12s ease,
+            opacity 0.12s ease;
         @include sf.focusable;
         &:hover:not(:disabled) {
             opacity: 1;

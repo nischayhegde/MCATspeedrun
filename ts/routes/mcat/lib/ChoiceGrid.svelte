@@ -31,12 +31,18 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             on:click={() => dispatch("choose", { letter })}
         >
             <span class="letter">{letter}</span>
-            {#if graded && chosen !== null && letter === answer}<span class="mark">✓</span>{/if}
-            {#if graded && chosen === letter && letter !== answer}<span class="mark">✗</span>{/if}
+            {#if graded && chosen !== null && letter === answer}<span class="mark">
+                    ✓
+                </span>{/if}
+            {#if graded && chosen === letter && letter !== answer}<span class="mark">
+                    ✗
+                </span>{/if}
             {#if !lettersOnly && choices[i] && !collapsed}
                 <span class="choice-text">{choices[i]}</span>
             {/if}
-            {#if !collapsed && !disabled}<span class="hint"><KeyHint key={letter} /></span>{/if}
+            {#if !collapsed && !disabled}<span class="hint">
+                    <KeyHint key={letter} />
+                </span>{/if}
         </button>
     {/each}
 </div>
@@ -54,6 +60,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         }
     }
     .choice {
+        /* min-width 0 lets grid tracks shrink below the content's intrinsic
+           width, so a long unbreakable token wraps instead of forcing the row
+           past the page's hidden x-overflow. */
+        min-width: 0;
         display: flex;
         align-items: center;
         gap: 0.5rem;
@@ -64,7 +74,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         color: inherit;
         cursor: pointer;
         text-align: left;
-        transition: border-color 0.12s ease, background 0.12s ease;
+        transition:
+            border-color 0.12s ease,
+            background 0.12s ease;
         @include sf.focusable;
         &:hover:not(:disabled) {
             border-color: var(--sf-gold);
@@ -89,6 +101,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .letter {
         font-weight: 800;
         color: var(--sf-red);
+    }
+    .choice-text {
+        min-width: 0;
+        overflow-wrap: anywhere;
     }
     .hint {
         margin-left: auto;

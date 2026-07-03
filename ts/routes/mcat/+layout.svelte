@@ -6,7 +6,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     import { goto } from "$app/navigation";
     import { page } from "$app/stores";
 
+    import type { LayoutData } from "./$types";
     import gloveIcon from "./lib/assets/glove-icon.png";
+
+    export let data: LayoutData;
 
     const links = [
         { href: "/mcat", label: "Dashboard" },
@@ -16,6 +19,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     $: path = $page.url.pathname.replace(/\/$/, "") || "/mcat";
     $: showKbdLegend = path === "/mcat/study" || path === "/mcat/diagnostic";
+    // Study needs at least one assessed leaf, which today can only come from
+    // taking (even a partial) diagnostic — that's the app's only entry point
+    // that seeds evidence across leaves.
+    $: diagnosticDone = data.readiness.leaves.some((leaf) => leaf.assessed);
 </script>
 
 <div class="mcat-shell">
@@ -26,18 +33,25 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             aria-label="Scorefighter home"
         >
             <img class="glove-mark" src={gloveIcon} alt="" aria-hidden="true" />
-            <span class="wordmark">Score<b>fighter</b></span>
+            <span class="wordmark">
+                Score
+                <b>fighter</b>
+            </span>
         </button>
         {#if showKbdLegend}
             <span class="kbd-legend">A–D answer · 0 not sure · ↵ confirm</span>
         {/if}
         <div class="links" class:with-legend={showKbdLegend}>
             {#each links as link (link.href)}
+                {@const locked = link.href === "/mcat/study" && !diagnosticDone}
                 <button
                     class="nav-link"
                     class:active={path === link.href}
+                    class:locked
                     aria-current={path === link.href ? "page" : undefined}
-                    on:click={() => goto(link.href)}
+                    aria-disabled={locked}
+                    title={locked ? "Complete a diagnostic first" : undefined}
+                    on:click={() => !locked && goto(link.href)}
                 >
                     {link.label}
                 </button>
@@ -212,10 +226,44 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         border-radius: 0;
     }
 
+    .nav-link.locked {
+        opacity: 0.4;
+        cursor: default;
+    }
+
+    .nav-link.locked:hover {
+        color: var(--sf-dim);
+        background: none;
+    }
+
     .mcat-content {
         flex: 1;
         min-height: 0;
         overflow-x: hidden;
         overflow-y: auto;
+    }
+
+    /* Slim dark scrollbars for every scroll area inside the shell (page
+       fallback scroll, explanation boxes, panels) — stock Chromium bars read
+       as a glitch on the Fight Night surfaces. */
+    .mcat-shell :global(::-webkit-scrollbar) {
+        width: 10px;
+        height: 10px;
+    }
+    .mcat-shell :global(::-webkit-scrollbar-track) {
+        background: transparent;
+    }
+    .mcat-shell :global(::-webkit-scrollbar-thumb) {
+        background: var(--sf-border);
+        border-radius: 8px;
+        border: 2px solid transparent;
+        background-clip: padding-box;
+    }
+    .mcat-shell :global(::-webkit-scrollbar-thumb:hover) {
+        background: var(--sf-steel);
+        background-clip: padding-box;
+    }
+    .mcat-shell :global(::-webkit-scrollbar-corner) {
+        background: transparent;
     }
 </style>
