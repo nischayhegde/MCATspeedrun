@@ -19,6 +19,7 @@
 pub mod adapter;
 pub mod aggregate;
 pub mod diagnostic;
+pub mod grader;
 pub mod leaf_tag;
 pub mod model;
 pub mod scheduler;
