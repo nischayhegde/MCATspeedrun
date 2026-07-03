@@ -32,6 +32,16 @@ impl Grade {
     pub fn as_u8(self) -> u8 {
         self as u8
     }
+
+    /// Recall credit as fluency evidence: full for Good/Easy, partial for
+    /// Hard (a Partial LLM verdict, or a self-graded "hard"), none for Again.
+    pub fn recall_credit(self) -> f32 {
+        match self {
+            Grade::Again => 0.0,
+            Grade::Hard => PARTIAL_CREDIT,
+            Grade::Good | Grade::Easy => 1.0,
+        }
+    }
 }
 
 /// Broad item category, used to pick latency thresholds and routing.
@@ -112,15 +122,27 @@ pub struct Review {
     /// Correctness is verdict-backed (LLM-graded typed answer, or an
     /// auto-graded MCQ) rather than a self-pressed grade button.
     pub objective: bool,
+    /// Scheduled gap (days) the previous review set for this one; 0.0 when
+    /// unknown (first review, learning steps).
+    pub scheduled_days: f32,
+    /// Item difficulty 1..=5 from `mcat::diff::N`; 3 when untagged.
+    pub difficulty: u8,
 }
 
 impl Review {
-    /// Continuous spacing weight of this review as fluency evidence: the
-    /// spacing effect isn't a same-day cliff, so evidence scales with the gap
-    /// since the card was last seen. First-ever exposure counts fully (it is
+    /// Evidence weight of this review for fluency: how much forgetting the
+    /// recall actually fought through. When the scheduled interval is known
+    /// (review phase), estimate retrievability at answer time assuming the
+    /// scheduler targeted [`R_TARGET`] at the due date — answering on
+    /// schedule is full evidence at any interval length, answering early
+    /// proportionally less. Otherwise (first exposure, learning steps) fall
+    /// back to the elapsed-days ramp: first-ever exposure counts fully (it is
     /// the baseline attempt, not a massed repeat).
     pub fn spacing_weight(&self) -> f32 {
-        if self.elapsed_days <= 0.0 {
+        if self.scheduled_days >= 1.0 && self.elapsed_days > 0.0 {
+            let r_hat = R_TARGET.powf(self.elapsed_days / self.scheduled_days);
+            clamp01((1.0 - r_hat) / (1.0 - R_TARGET))
+        } else if self.elapsed_days <= 0.0 {
             if self.massed {
                 0.0
             } else {
@@ -229,8 +251,26 @@ pub const SPACED_CORRECT_TARGET: f32 = 2.0; // effective spaced-correct to open 
 // objective grading (LLM-verdict-backed reviews vs legacy self-graded ones)
 pub const SELF_GRADED_EVIDENCE_WEIGHT: f32 = 0.5; // discount for self-graded correct recalls
 
+// partial credit (Hard grade = Partial verdict or self-graded "hard")
+pub const PARTIAL_CREDIT: f32 = 0.5;
+
+// MCQ evidence model
+pub const GUESS_RATE: f32 = 0.25; // 4-option chance rate (CARS included)
+pub const SPEED_QUALITY_FLOOR: f32 = 0.7; // slowest correct still earns this
+pub const DIFF_EVIDENCE_STEP: f32 = 0.15; // evidence scaling per difficulty step
+pub const APP_DEMONSTRATED_TARGET: f32 = 1.3; // effective corrects to demonstrate
+pub const APP_MIN_CORRECTED_ACCURACY: f32 = 0.5; // corrected-accuracy floor ditto
+
+// FC-pooled shrinkage
+pub const FC_PRIOR_PSEUDO_N: f32 = 10.0; // pseudo-evidence of the global prior
+
+// per-student MCQ pace factor
+pub const PACE_MIN_SAMPLES: usize = 20;
+pub const PACE_MIN: f32 = 0.8;
+pub const PACE_MAX: f32 = 1.25;
+
 // application-implies-fluency (PRD bidirectional inference)
-pub const APP_FLUENCY_FLOOR: f32 = 0.8; // any correct application implies at least this fluency
+pub const APP_FLUENCY_FLOOR: f32 = 0.8; // demonstrated application implies at least this fluency
 
 // stale-leaf recalibration (scheduler)
 pub const STALE_FRESHNESS: f32 = 0.6; // below this, probe the leaf again
@@ -248,4 +288,52 @@ pub const SCALE_POINTS: f32 = 56.0; // width of the 472..528 scale
 
 pub fn clamp01(x: f32) -> f32 {
     x.clamp(0.0, 1.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn review(elapsed_days: f32, scheduled_days: f32, massed: bool) -> Review {
+        Review {
+            ts_ms: 0,
+            grade: Grade::Good,
+            correct: true,
+            ms: 5_000,
+            kind: ItemKind::Flashcard,
+            is_application: false,
+            is_cars: false,
+            elapsed_days,
+            massed,
+            productive_failure: false,
+            latency: latency_for(ItemKind::Flashcard),
+            objective: true,
+            scheduled_days,
+            difficulty: 3,
+        }
+    }
+
+    #[test]
+    fn schedule_aware_spacing_weight() {
+        // on schedule = full evidence at any interval length
+        assert!((review(2.0, 2.0, false).spacing_weight() - 1.0).abs() < 1e-3);
+        assert!((review(60.0, 60.0, false).spacing_weight() - 1.0).abs() < 1e-3);
+        // early review = proportionally weaker
+        let early = review(5.0, 10.0, false).spacing_weight();
+        assert!(early > 0.4 && early < 0.6, "early weight {early}");
+        // overdue clamps at 1.0
+        assert_eq!(review(30.0, 10.0, false).spacing_weight(), 1.0);
+        // unknown schedule falls back to the elapsed ramp
+        assert!((review(1.5, 0.0, false).spacing_weight() - 0.5).abs() < 1e-6);
+        assert_eq!(review(0.0, 0.0, false).spacing_weight(), 1.0); // first
+        assert_eq!(review(0.0, 0.0, true).spacing_weight(), 0.0); // massed
+    }
+
+    #[test]
+    fn recall_credit_mapping() {
+        assert_eq!(Grade::Again.recall_credit(), 0.0);
+        assert_eq!(Grade::Hard.recall_credit(), PARTIAL_CREDIT);
+        assert_eq!(Grade::Good.recall_credit(), 1.0);
+        assert_eq!(Grade::Easy.recall_credit(), 1.0);
+    }
 }

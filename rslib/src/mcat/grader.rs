@@ -9,7 +9,6 @@ use std::time::Duration;
 use serde::Deserialize;
 
 use super::model::Grade;
-use super::model::Latency;
 use crate::error::NetworkError;
 use crate::error::NetworkErrorKind;
 use crate::prelude::*;
@@ -49,30 +48,13 @@ pub fn gave_up_result() -> GradedAnswer {
     }
 }
 
-/// Typed-mode latency thresholds (ms). Typing an answer is much slower than
-/// pressing a grade button, so these are wider than
-/// `latency_for(ItemKind::Flashcard)`. PLACEHOLDER calibration, like the other
-/// per-type thresholds (see PRD).
-pub fn typed_latency() -> Latency {
-    Latency {
-        fast: 20_000,
-        slow: 45_000,
-    }
-}
-
-/// Map an LLM verdict + response time to the FSRS grade (design spec §2):
-/// correctness decides pass/fail, speed modulates only full-credit answers.
-pub fn grade_typed(verdict: Verdict, ms: u32) -> Grade {
+/// Map an LLM verdict to the FSRS grade. Flashcards are untimed: typing
+/// speed is noise, and the verdict is the objective correctness signal.
+pub fn grade_typed(verdict: Verdict) -> Grade {
     match verdict {
         Verdict::Incorrect => Grade::Again,
         Verdict::Partial => Grade::Hard,
-        Verdict::Correct => {
-            if ms <= typed_latency().fast {
-                Grade::Easy
-            } else {
-                Grade::Good
-            }
-        }
+        Verdict::Correct => Grade::Good,
     }
 }
 
@@ -263,14 +245,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn verdict_maps_to_grade_with_speed_modulation() {
-        let fast = typed_latency().fast;
-        assert_eq!(grade_typed(Verdict::Incorrect, 1_000), Grade::Again);
-        assert_eq!(grade_typed(Verdict::Incorrect, 100_000), Grade::Again);
-        assert_eq!(grade_typed(Verdict::Partial, 1_000), Grade::Hard);
-        assert_eq!(grade_typed(Verdict::Correct, fast), Grade::Easy);
-        assert_eq!(grade_typed(Verdict::Correct, fast + 1), Grade::Good);
-        assert_eq!(grade_typed(Verdict::Correct, 200_000), Grade::Good);
+    fn verdicts_map_to_grades_untimed() {
+        assert_eq!(grade_typed(Verdict::Incorrect), Grade::Again);
+        assert_eq!(grade_typed(Verdict::Partial), Grade::Hard);
+        assert_eq!(grade_typed(Verdict::Correct), Grade::Good);
     }
 
     #[test]

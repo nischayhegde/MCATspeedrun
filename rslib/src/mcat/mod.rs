@@ -76,28 +76,40 @@ mod tests {
     use crate::mcat::model::ItemKind;
     use crate::mcat::model::DAY_MS;
 
+    fn app_review(now: i64, days_ago: i64) -> Review {
+        Review {
+            ts_ms: now - days_ago * DAY_MS,
+            grade: Grade::Easy,
+            correct: true,
+            ms: 30_000,
+            kind: ItemKind::Application,
+            is_application: true,
+            is_cars: false,
+            elapsed_days: 0.0,
+            massed: false,
+            productive_failure: false,
+            latency: latency_for(ItemKind::Application),
+            objective: true,
+            scheduled_days: 0.0,
+            difficulty: 3,
+        }
+    }
+
     #[test]
     fn end_to_end_readiness_from_reviews() {
         let now = 1_700_000_000_000i64;
         let mut reviews: HashMap<String, Vec<Review>> = HashMap::new();
+        // one correct answer is compatible with a lucky guess: gate stays shut
+        reviews.insert("1B".to_string(), vec![app_review(now, 10)]);
+        let rote: HashMap<String, Vec<RoteMemory>> = HashMap::new();
+        let states = compute_leaf_states(&reviews, &rote, now);
+        assert!(!states["1B"].gate_open);
+
+        // consistent spaced corrects demonstrate application and open it
         reviews.insert(
             "1B".to_string(),
-            vec![Review {
-                ts_ms: now - 10 * DAY_MS,
-                grade: Grade::Easy,
-                correct: true,
-                ms: 30_000,
-                kind: ItemKind::Application,
-                is_application: true,
-                is_cars: false,
-                elapsed_days: 0.0,
-                massed: false,
-                productive_failure: false,
-                latency: latency_for(ItemKind::Application),
-                objective: true,
-            }],
+            vec![app_review(now, 10), app_review(now, 5)],
         );
-        let rote: HashMap<String, Vec<RoteMemory>> = HashMap::new();
         let states = compute_leaf_states(&reviews, &rote, now);
         assert!(states["1B"].gate_open);
         let r = readiness(&states);

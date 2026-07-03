@@ -3,7 +3,7 @@
 
 //! Derives per-leaf study state (fluency/application/gate/freshness/depth) from
 //! the review log + FSRS retrievability. This is the scoring layer that sits on
-//! top of FSRS. Ported from `mcat-ui/src/engine/aggregate.ts`.
+//! top of FSRS.
 
 use super::model::*;
 use super::taxonomy::Leaf;
@@ -12,11 +12,10 @@ fn recency_weight(age_days: f32) -> f32 {
     (-age_days.max(0.0) / RECENCY_TAU_DAYS).exp()
 }
 
-/// Speed credit for a recall: 1.0 at/below the fast threshold, 0.0 at/above
-/// slow, linear in between. Automaticity evidence is continuous — a recall
-/// just over the fast threshold is far stronger evidence than one just under
-/// slow, and a step function would cap fluency for anyone answering at a
-/// normal (Good) pace.
+/// Speed credit for a correct MCQ answer: 1.0 at/below the fast threshold,
+/// 0.0 at/above slow, linear in between. Speed evidence is continuous — an
+/// answer just over the fast threshold is far stronger evidence than one just
+/// under slow. Flashcards are untimed and never consult this.
 fn fastness(ms: u32, t: Latency) -> f32 {
     if ms <= t.fast {
         1.0
@@ -24,28 +23,6 @@ fn fastness(ms: u32, t: Latency) -> f32 {
         0.0
     } else {
         (t.slow - ms) as f32 / (t.slow - t.fast) as f32
-    }
-}
-
-/// Weighted mean over reviews, each weighted recency x spacing: recent
-/// evidence counts more, and well-spaced evidence counts more (the spacing
-/// effect is continuous, not a same-day cliff).
-fn weighted_mean<F>(reviews: &[&Review], spacing: &[f32], now_ms: i64, val: F) -> f32
-where
-    F: Fn(&Review) -> f32,
-{
-    let mut ws = 0.0f32;
-    let mut vs = 0.0f32;
-    for (&r, &sw) in reviews.iter().zip(spacing) {
-        let age_days = (now_ms - r.ts_ms) as f32 / DAY_MS as f32;
-        let w = recency_weight(age_days) * sw;
-        ws += w;
-        vs += w * val(r);
-    }
-    if ws > 0.0 {
-        vs / ws
-    } else {
-        0.0
     }
 }
 
@@ -89,6 +66,11 @@ pub fn score_leaf(leaf: &Leaf, reviews: &[Review], rote: &[RoteMemory], now_ms: 
         .filter(|r| r.is_application || r.is_cars)
         .collect();
 
+    let evidence_weight = |r: &Review, sw: f32| -> f32 {
+        let age_days = (now_ms - r.ts_ms) as f32 / DAY_MS as f32;
+        recency_weight(age_days) * sw
+    };
+
     // durability = mean current retrievability across rote cards
     let durability = if rote.is_empty() {
         0.0
@@ -96,72 +78,111 @@ pub fn score_leaf(leaf: &Leaf, reviews: &[Review], rote: &[RoteMemory], now_ms: 
         rote.iter().map(|m| m.retrievability_now).sum::<f32>() / rote.len() as f32
     };
 
-    // automaticity = recency+spacing-weighted fastness of correct rote recalls.
-    // The spacing weight replaces the old binary massed filter: a same-day
-    // repeat contributes ~nothing, a 3+ day gap counts fully, in between is
-    // proportional evidence.
-    let rote_spacing: Vec<f32> = rote_reviews.iter().map(|r| r.spacing_weight()).collect();
-    let automaticity = weighted_mean(&rote_reviews, &rote_spacing, now_ms, |r| {
-        if r.correct {
-            fastness(r.ms, r.latency)
-        } else {
-            0.0
+    // consistency = recency+spacing-weighted recall credit of rote reviews.
+    // Flashcards are untimed: the verdict (or grade button) is the signal,
+    // latency is not. Partial verdicts earn half credit, and first-exposure
+    // misses are instruction (productive failure), not evidence.
+    let mut cw = 0.0f32;
+    let mut cv = 0.0f32;
+    for r in &rote_reviews {
+        if r.productive_failure {
+            continue;
         }
-    });
-    // effective spaced-correct: sum of spacing weights over correct recalls.
-    // Verdict-backed (objective) recalls count fully; legacy self-graded ones
-    // are discounted — an "Easy" click is weak evidence (PRD: Hendrick).
-    let spaced_correct: f32 = rote_reviews
-        .iter()
-        .zip(&rote_spacing)
-        .filter(|(r, _)| r.correct)
-        .map(|(r, &w)| {
-            w * if r.objective {
-                1.0
-            } else {
-                SELF_GRADED_EVIDENCE_WEIGHT
-            }
-        })
-        .sum();
+        let w = evidence_weight(r, r.spacing_weight());
+        cw += w;
+        cv += w * r.grade.recall_credit();
+    }
+    let consistency = if cw > 0.0 { cv / cw } else { 0.0 };
 
-    // application = recency+spacing-weighted correctness (with a speed bonus)
+    // effective spaced-correct toward the gate, counted only after `cut`:
+    // spacing x recall credit x objectivity discount. Verdict-backed recalls
+    // count fully; legacy self-graded ones are discounted — an "Easy" click
+    // is weak evidence (PRD: Hendrick).
+    let spaced_correct_since = |cut: i64| -> f32 {
+        rote_reviews
+            .iter()
+            .filter(|r| r.ts_ms > cut && r.correct)
+            .map(|r| {
+                r.spacing_weight()
+                    * r.grade.recall_credit()
+                    * if r.objective {
+                        1.0
+                    } else {
+                        SELF_GRADED_EVIDENCE_WEIGHT
+                    }
+            })
+            .sum()
+    };
+
+    // application = chance-corrected accuracy x speed quality. Accuracy
+    // evidence is difficulty-weighted: a correct on a hard item (or a miss on
+    // an easy one) is stronger evidence than the reverse. The chance
+    // correction means a blind 4-option guesser converges to ~0, not ~0.25.
     let app_spacing = app_spacing_weights(&app_reviews);
-    let application = weighted_mean(&app_reviews, &app_spacing, now_ms, |r| {
-        if !r.correct {
-            return 0.0;
+    let mut pw = 0.0f32;
+    let mut pv = 0.0f32;
+    let mut qw = 0.0f32;
+    let mut qv = 0.0f32;
+    for (&r, &sw) in app_reviews.iter().zip(&app_spacing) {
+        let base = evidence_weight(r, sw);
+        let step = DIFF_EVIDENCE_STEP * (r.difficulty as f32 - 3.0);
+        let dw = if r.correct { 1.0 + step } else { 1.0 - step };
+        pw += base * dw;
+        if r.correct {
+            pv += base * dw;
+            qw += base;
+            qv += base
+                * (SPEED_QUALITY_FLOOR + (1.0 - SPEED_QUALITY_FLOOR) * fastness(r.ms, r.latency));
         }
-        if r.ms <= r.latency.fast {
-            1.0
-        } else {
-            0.7
-        }
-    });
-    let application_demonstrated = app_reviews.iter().any(|r| r.correct);
+    }
+    let accuracy = if pw > 0.0 { pv / pw } else { 0.0 };
+    let corrected = clamp01((accuracy - GUESS_RATE) / (1.0 - GUESS_RATE));
+    let speed_quality = if qw > 0.0 { qv / qw } else { 1.0 };
+    let application = corrected * speed_quality;
 
-    // fluency: durability + automaticity; demonstrated application implies
+    // demonstrated application: enough effective corrects since `cut`, AND
+    // whole-history corrected accuracy clear of the guessing floor — a single
+    // lucky 25% guess must never open the gate (PRD: consistency across
+    // multiple attempts, never a single data point).
+    let app_correct_since = |cut: i64| -> f32 {
+        app_reviews
+            .iter()
+            .zip(&app_spacing)
+            .filter(|(r, _)| r.ts_ms > cut && r.correct)
+            .map(|(_, &w)| w)
+            .sum()
+    };
+    let app_demonstrated = |cut: i64| -> bool {
+        app_correct_since(cut) >= APP_DEMONSTRATED_TARGET && corrected >= APP_MIN_CORRECTED_ACCURACY
+    };
+
+    // fluency: durability + consistency; demonstrated application implies
     // fluency — at least the floor, tracking the application score above it
     // so an application-strong leaf isn't pinned at the floor forever
     let mut fluency = if leaf.is_cars {
         0.0
     } else {
-        clamp01(0.5 * durability + 0.5 * automaticity)
+        clamp01(0.5 * durability + 0.5 * consistency)
     };
-    if !leaf.is_cars && application_demonstrated {
+    if !leaf.is_cars && app_demonstrated(i64::MIN) {
         fluency = fluency.max(APP_FLUENCY_FLOOR.max(application));
     }
 
-    // demotion: latest evidence is a genuine (post-learning) lapse -> gate closes
-    let latest = sorted.last();
-    let recent_lapse = latest
-        .map(|r| !r.correct && !r.productive_failure && sorted.len() > 1)
-        .unwrap_or(false);
+    // recovery-aware gate: a genuine (post-learning) miss closes the gate
+    // immediately, and the student re-earns it with the same evidence bar as
+    // the first time — counted only from reviews after the most recent miss.
+    let lapse_ts = sorted
+        .iter()
+        .rev()
+        .find(|r| !r.correct && !r.productive_failure)
+        .map(|r| r.ts_ms)
+        .unwrap_or(i64::MIN);
 
     let gate_open = if leaf.is_cars {
         true
     } else {
-        !recent_lapse
-            && ((fluency >= FLUENCY_THRESHOLD && spaced_correct >= SPACED_CORRECT_TARGET)
-                || application_demonstrated)
+        (fluency >= FLUENCY_THRESHOLD && spaced_correct_since(lapse_ts) >= SPACED_CORRECT_TARGET)
+            || app_demonstrated(lapse_ts)
     };
 
     let last_app_age = app_reviews
@@ -176,8 +197,14 @@ pub fn score_leaf(leaf: &Leaf, reviews: &[Review], rote: &[RoteMemory], now_ms: 
     };
 
     // evidence depth = effective spaced attempts (sum of spacing weights), so
-    // ten massed repeats don't read as ten independent data points
-    let attempts = rote_spacing.iter().sum::<f32>() + app_spacing.iter().sum::<f32>();
+    // ten massed repeats don't read as ten independent data points; first-
+    // exposure misses are instruction, not evidence
+    let attempts = rote_reviews
+        .iter()
+        .filter(|r| !r.productive_failure)
+        .map(|r| r.spacing_weight())
+        .sum::<f32>()
+        + app_spacing.iter().sum::<f32>();
 
     LeafState {
         id: leaf.id.to_string(),
@@ -197,12 +224,12 @@ mod tests {
 
     const NOW: i64 = 1_700_000_000_000;
 
-    fn rote_review(days_ago: i64, correct: bool, ms: u32, massed: bool) -> Review {
+    fn rote_review_graded(days_ago: i64, grade: Grade, massed: bool) -> Review {
         Review {
             ts_ms: NOW - days_ago * DAY_MS,
-            grade: if correct { Grade::Good } else { Grade::Again },
-            correct,
-            ms,
+            grade,
+            correct: grade != Grade::Again,
+            ms: 5_000,
             kind: ItemKind::Flashcard,
             is_application: false,
             is_cars: false,
@@ -211,7 +238,17 @@ mod tests {
             productive_failure: false,
             latency: latency_for(ItemKind::Flashcard),
             objective: true,
+            scheduled_days: 0.0,
+            difficulty: 3,
         }
+    }
+
+    fn rote_review(days_ago: i64, correct: bool, massed: bool) -> Review {
+        rote_review_graded(
+            days_ago,
+            if correct { Grade::Good } else { Grade::Again },
+            massed,
+        )
     }
 
     fn app_review(days_ago: i64, correct: bool, ms: u32, is_cars: bool) -> Review {
@@ -233,6 +270,8 @@ mod tests {
             productive_failure: false,
             latency: latency_for(kind),
             objective: true,
+            scheduled_days: 0.0,
+            difficulty: 3,
         }
     }
 
@@ -251,33 +290,107 @@ mod tests {
     }
 
     #[test]
-    fn slow_rote_stays_below_gate() {
-        let l = leaf("1A").unwrap();
-        // one first-exposure miss then one spaced, mid-speed correct recall
-        let mut miss = rote_review(30, false, 13_000, false);
-        miss.productive_failure = true;
-        let reviews = vec![miss, rote_review(8, true, 10_000, false)];
-        let rote = vec![RoteMemory {
-            retrievability_now: 0.8,
-            reps: 2,
-        }];
-        let s = score_leaf(&l, &reviews, &rote, NOW);
-        assert!(!s.gate_open, "fluency was {}", s.fluency);
-        assert!(s.assessed);
+    fn single_lucky_correct_does_not_open_gate_or_pin_floor() {
+        let l = leaf("1B").unwrap();
+        let s = score_leaf(&l, &[app_review(10, true, 30_000, false)], &[], NOW);
+        assert!(!s.gate_open, "one correct guess opened the gate");
+        assert_eq!(s.fluency, 0.0, "one correct guess pinned the fluency floor");
+
+        // one correct among a recent miss: corrected accuracy below the floor
+        let reviews = vec![
+            app_review(10, true, 30_000, false),
+            app_review(1, false, 130_000, false),
+        ];
+        let s = score_leaf(&l, &reviews, &[], NOW);
+        assert!(!s.gate_open);
+        assert_eq!(s.fluency, 0.0);
     }
 
     #[test]
-    fn mid_speed_recalls_earn_partial_automaticity() {
-        // fastness is a continuous ramp, not a 0.4 step: a spaced 7s recall on
-        // a well-retained leaf must read well above the old ~0.65 ceiling
+    fn guesser_reads_near_zero_application() {
+        // ~25% accuracy spread over days = chance; corrected application ~ 0
+        let l = leaf("1B").unwrap();
+        let mut reviews = Vec::new();
+        for i in 0..8i64 {
+            reviews.push(app_review(20 - 2 * i, i % 4 == 0, 30_000, false));
+        }
+        let s = score_leaf(&l, &reviews, &[], NOW);
+        assert!(s.application < 0.1, "guesser read {}", s.application);
+        assert!(!s.gate_open);
+    }
+
+    #[test]
+    fn hard_item_correctness_counts_more() {
+        let l = leaf("1B").unwrap();
+        let hist = |d: u8| {
+            let mut a = app_review(10, true, 30_000, false);
+            a.difficulty = d;
+            let mut b = app_review(5, false, 90_000, false);
+            b.difficulty = d;
+            score_leaf(&l, &[a, b], &[], NOW).application
+        };
+        assert!(hist(5) > hist(1), "hard {} <= easy {}", hist(5), hist(1));
+    }
+
+    #[test]
+    fn lapse_closes_gate_and_recovery_reearns_it() {
+        let l = leaf("1C").unwrap();
+        let mut reviews = vec![
+            app_review(20, true, 30_000, false),
+            app_review(15, true, 30_000, false),
+            app_review(10, false, 130_000, false), // genuine lapse
+        ];
+        let s = score_leaf(&l, &reviews, &[], NOW);
+        assert!(!s.gate_open, "lapse did not close the gate");
+
+        // one post-lapse correct is not enough to reopen
+        reviews.push(app_review(8, true, 30_000, false));
+        let s = score_leaf(&l, &reviews, &[], NOW);
+        assert!(!s.gate_open, "single correct reopened the gate");
+
+        // a second spaced post-lapse correct re-earns it
+        reviews.push(app_review(4, true, 30_000, false));
+        let s = score_leaf(&l, &reviews, &[], NOW);
+        assert!(s.gate_open, "recovery evidence failed to reopen the gate");
+    }
+
+    #[test]
+    fn partial_recalls_earn_half_credit() {
         let l = leaf("1A").unwrap();
-        let reviews = vec![rote_review(5, true, 7_000, false)];
-        let rote = vec![RoteMemory {
-            retrievability_now: 0.9,
+        let rote_mem = vec![RoteMemory {
+            retrievability_now: 0.8,
             reps: 3,
         }];
-        let s = score_leaf(&l, &reviews, &rote, NOW);
-        assert!(s.fluency > 0.85, "fluency was {}", s.fluency);
+        let full = vec![
+            rote_review_graded(10, Grade::Good, false),
+            rote_review_graded(5, Grade::Good, false),
+        ];
+        let partial = vec![
+            rote_review_graded(10, Grade::Hard, false),
+            rote_review_graded(5, Grade::Hard, false),
+        ];
+        let f_full = score_leaf(&l, &full, &rote_mem, NOW).fluency;
+        let f_partial = score_leaf(&l, &partial, &rote_mem, NOW).fluency;
+        assert!((f_full - 0.9).abs() < 1e-3, "full was {f_full}");
+        assert!((f_partial - 0.65).abs() < 1e-3, "partial was {f_partial}");
+    }
+
+    #[test]
+    fn productive_failure_is_instruction_not_evidence() {
+        let l = leaf("1A").unwrap();
+        let rote_mem = vec![RoteMemory {
+            retrievability_now: 0.8,
+            reps: 2,
+        }];
+        let mut miss = rote_review(30, false, false);
+        miss.productive_failure = true;
+        let reviews = vec![miss, rote_review(8, true, false)];
+        let s = score_leaf(&l, &reviews, &rote_mem, NOW);
+        // consistency = 1.0 (the PF miss is excluded): 0.5*0.8 + 0.5*1.0
+        assert!((s.fluency - 0.9).abs() < 1e-3, "fluency was {}", s.fluency);
+        // but one spaced correct is still below the gate's evidence bar
+        assert!(!s.gate_open);
+        assert!(s.assessed);
     }
 
     #[test]
@@ -293,19 +406,6 @@ mod tests {
         let s = score_leaf(&l, &reviews, &[], NOW);
         assert!(s.application > 0.95, "application was {}", s.application);
         assert!(s.fluency > 0.95, "fluency was {}", s.fluency);
-    }
-
-    #[test]
-    fn weak_demonstrated_application_keeps_the_fluency_floor() {
-        // one correct among misses: the PRD floor holds, but no more
-        let l = leaf("1B").unwrap();
-        let reviews = vec![
-            app_review(10, true, 30_000, false),
-            app_review(1, false, 130_000, false),
-        ];
-        let s = score_leaf(&l, &reviews, &[], NOW);
-        assert!(s.application < 0.5, "application was {}", s.application);
-        assert!((s.fluency - 0.8).abs() < 1e-6, "fluency was {}", s.fluency);
     }
 
     #[test]
@@ -327,9 +427,9 @@ mod tests {
         }];
 
         // cramming: first exposure + four fast same-day repeats
-        let mut crammed = vec![rote_review(0, true, 3_000, false)];
+        let mut crammed = vec![rote_review(0, true, false)];
         for _ in 0..4 {
-            crammed.push(rote_review(0, true, 3_000, true));
+            crammed.push(rote_review(0, true, true));
         }
         let s = score_leaf(&l, &crammed, &rote_mem, NOW);
         assert!(!s.gate_open, "cramming opened the gate");
@@ -339,14 +439,14 @@ mod tests {
             s.attempts
         );
 
-        // the same fast correct recalls spaced across days count fully
+        // the same correct recalls spaced across days count fully
         let spaced = vec![
-            rote_review(20, true, 3_000, false),
-            rote_review(10, true, 3_000, false),
-            rote_review(5, true, 3_000, false),
+            rote_review(20, true, false),
+            rote_review(10, true, false),
+            rote_review(5, true, false),
         ];
         let s = score_leaf(&l, &spaced, &rote_mem, NOW);
-        assert!(s.gate_open, "spaced fast recalls should open the gate");
+        assert!(s.gate_open, "spaced correct recalls should open the gate");
         assert!(s.attempts > 2.5);
     }
 
@@ -371,7 +471,7 @@ mod tests {
 
     #[test]
     fn self_graded_evidence_is_discounted_for_the_gate() {
-        // the same spaced fast-correct history that opens the gate when
+        // the same spaced correct history that opens the gate when
         // verdict-backed (see massed_cramming test) is only half evidence
         // when it came from self-pressed grade buttons
         let l = leaf("1A").unwrap();
@@ -380,9 +480,9 @@ mod tests {
             reps: 5,
         }];
         let mut self_rated = vec![
-            rote_review(20, true, 3_000, false),
-            rote_review(10, true, 3_000, false),
-            rote_review(5, true, 3_000, false),
+            rote_review(20, true, false),
+            rote_review(10, true, false),
+            rote_review(5, true, false),
         ];
         for r in &mut self_rated {
             r.objective = false;
@@ -392,17 +492,5 @@ mod tests {
             !s.gate_open,
             "self-graded clicks alone opened the fluency gate"
         );
-    }
-
-    #[test]
-    fn recent_genuine_lapse_closes_gate() {
-        let l = leaf("1C").unwrap();
-        let reviews = vec![
-            app_review(20, true, 30_000, false),
-            app_review(15, true, 30_000, false),
-            app_review(1, false, 130_000, false), // recent wrong (not first exposure)
-        ];
-        let s = score_leaf(&l, &reviews, &[], NOW);
-        assert!(!s.gate_open);
     }
 }

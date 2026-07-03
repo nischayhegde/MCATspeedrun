@@ -72,6 +72,7 @@ fn build_card_reviews(
     is_app: bool,
     cars: bool,
     latency: Latency,
+    difficulty: u8,
     objective_ids: &HashSet<i64>,
 ) -> Vec<Review> {
     let mut sorted: Vec<&RevlogEntry> = entries.iter().collect();
@@ -79,6 +80,7 @@ fn build_card_reviews(
 
     let mut out = Vec::new();
     let mut prev_ts: Option<i64> = None;
+    let mut prev_interval: i32 = 0;
     let mut reps: u32 = 0;
     for e in sorted {
         if e.button_chosen == 0 {
@@ -97,15 +99,19 @@ fn build_card_reviews(
             None => 0.0,
         };
         let massed = reps > 0 && elapsed_days < 1.0;
-        let productive_failure = reps == 0 && !correct;
+        // Productive failure is a rote concept: a wrong first attempt on a
+        // fresh flashcard is instruction. A wrong first attempt on an MCQ is
+        // a genuine signal — instruction already happened at the rote stage.
+        let productive_failure = !is_app && !cars && reps == 0 && !correct;
         // MCQ answers are always auto-graded; a flashcard row is objective
-        // when a verdict-backed answer-log entry points at it. Typed answers
-        // are judged against the wider typed-mode thresholds.
+        // when a verdict-backed answer-log entry points at it.
         let objective = is_app || objective_ids.contains(&ts);
-        let latency = if !is_app && objective_ids.contains(&ts) {
-            super::grader::typed_latency()
+        // the scheduled gap this review was answered against (review phase
+        // stores positive days; learning steps store negative seconds)
+        let scheduled_days = if prev_interval > 0 {
+            prev_interval as f32
         } else {
-            latency
+            0.0
         };
         out.push(Review {
             ts_ms: ts,
@@ -120,14 +126,81 @@ fn build_card_reviews(
             productive_failure,
             latency,
             objective,
+            scheduled_days,
+            difficulty,
         });
         prev_ts = Some(ts);
+        prev_interval = e.interval;
         reps += 1;
     }
     out
 }
 
+/// Collection-config key for the per-student MCQ pace factor.
+const MCAT_PACE_FACTOR_KEY: &str = "mcatPaceFactor";
+
 impl Collection {
+    /// The student's stored pace factor (1.0 until enough timed MCQ evidence
+    /// accrues; refreshed by [`Collection::mcat_refresh_pace_factor`]).
+    fn mcat_pace_factor(&self) -> f32 {
+        self.get_config_optional(MCAT_PACE_FACTOR_KEY)
+            .unwrap_or(1.0)
+    }
+
+    /// Per-item thresholds, widened/narrowed by the student's own measured
+    /// pace. MCQs only: flashcards are untimed.
+    fn note_paced_latency(&self, tags: &[String], kind: ItemKind) -> Latency {
+        let t = note_expected_latency_unpaced(tags, kind);
+        if matches!(kind, ItemKind::Flashcard) {
+            return t;
+        }
+        let f = self.mcat_pace_factor();
+        Latency {
+            fast: (t.fast as f32 * f).round() as u32,
+            slow: (t.slow as f32 * f).round() as u32,
+        }
+    }
+
+    /// Recompute the student's pace factor from all correct, timed MCQ
+    /// answers: the median ratio of observed time to the item's expected
+    /// midpoint (unpaced, so the estimate can't chase itself).
+    fn mcat_refresh_pace_factor(&mut self) -> Result<()> {
+        let cids = self.search_cards("tag:mcat::*", SortMode::NoOrder)?;
+        let mut ratios: Vec<f32> = Vec::new();
+        for cid in cids {
+            let card = match self.storage.get_card(cid)? {
+                Some(c) => c,
+                None => continue,
+            };
+            let note = match self.storage.get_note(card.note_id)? {
+                Some(n) => n,
+                None => continue,
+            };
+            let leaf_id = match leaf_id_from_tags(&note.tags) {
+                Some(id) => id,
+                None => continue,
+            };
+            let cars = is_cars(&leaf_id);
+            if !(cars || note_is_application(&note.tags)) {
+                continue;
+            }
+            let kind = if cars {
+                ItemKind::Cars
+            } else {
+                ItemKind::Application
+            };
+            let t = note_expected_latency_unpaced(&note.tags, kind);
+            let mid = (t.fast + t.slow) as f32 / 2.0;
+            for e in self.storage.get_revlog_entries_for_card(cid)? {
+                if e.button_chosen > 1 && e.taken_millis > 0 {
+                    ratios.push(e.taken_millis as f32 / mid);
+                }
+            }
+        }
+        let factor = pace_factor_from_ratios(ratios);
+        self.transact_no_undo(|col| col.set_config(MCAT_PACE_FACTOR_KEY, &factor).map(|_| ()))
+    }
+
     /// Gather the scoring inputs (reviews + current rote retrievability) for a
     /// single leaf, by searching its tagged cards.
     fn mcat_leaf_inputs(&mut self, leaf_id: &str) -> Result<(Vec<Review>, Vec<RoteMemory>)> {
@@ -163,12 +236,20 @@ impl Collection {
             } else {
                 ItemKind::Flashcard
             };
-            let latency = note_expected_latency(&note.tags, kind);
+            let latency = self.note_paced_latency(&note.tags, kind);
+            let difficulty = difficulty_from_tags(&note.tags);
 
             let entries = self.storage.get_revlog_entries_for_card(cid)?;
             let objective_ids = self.storage.mcat_answer_log_ids_for_card(cid.0)?;
-            let card_reviews =
-                build_card_reviews(&entries, kind, is_app, cars, latency, &objective_ids);
+            let card_reviews = build_card_reviews(
+                &entries,
+                kind,
+                is_app,
+                cars,
+                latency,
+                difficulty,
+                &objective_ids,
+            );
             let reps = card_reviews.len() as u32;
             reviews.extend(card_reviews);
 
@@ -229,7 +310,10 @@ impl Collection {
     }
 
     /// Recompute every leaf from scratch (e.g. after import or diagnostic).
+    /// Also refreshes the per-student pace factor first, so the recomputed
+    /// states read against the student's own measured pace.
     pub fn mcat_recompute_all(&mut self) -> Result<()> {
+        self.mcat_refresh_pace_factor()?;
         for leaf in taxonomy::leaves() {
             self.mcat_persist_leaf(leaf.id)?;
         }
@@ -552,7 +636,7 @@ impl Collection {
             } else {
                 ItemKind::Application
             };
-            let latency = note_expected_latency(&note.tags, kind);
+            let latency = self.note_paced_latency(&note.tags, kind);
             scoring::grade_mcq(correct, milliseconds_taken, latency).grade
         } else {
             Grade::from_button(self_rating.clamp(1, 4) as u8)
@@ -600,7 +684,7 @@ impl Collection {
         graded: &GradedAnswer,
         typed_answer: &str,
     ) -> Result<Grade> {
-        let grade = grade_typed(graded.verdict, milliseconds_taken);
+        let grade = grade_typed(graded.verdict);
         self.transact(crate::ops::Op::AnswerCard, |col| {
             mcat_apply_grade(col, card_id, grade, milliseconds_taken)?;
             // answer_card_inner just appended this card's newest revlog row;
@@ -728,11 +812,23 @@ fn has_difficulty_tag(tags: &[String]) -> bool {
 }
 
 /// Per-item expected-time thresholds from the note's parser-scored reasoning
-/// complexity (`mcat::rc::N`) and calculation tedium (`mcat::ct::N`) tags.
-fn note_expected_latency(tags: &[String], kind: ItemKind) -> Latency {
+/// complexity (`mcat::rc::N`) and calculation tedium (`mcat::ct::N`) tags,
+/// before the per-student pace factor is applied.
+fn note_expected_latency_unpaced(tags: &[String], kind: ItemKind) -> Latency {
     let rc = marker_from_tags(tags, &["rc", "reasoning"]);
     let ct = marker_from_tags(tags, &["ct", "tedium"]);
     expected_latency(kind, rc, ct)
+}
+
+/// Median observed/expected time ratio, clamped; 1.0 with thin data. A
+/// legitimately slow (or fast) reader shifts every threshold rather than
+/// reading as uniformly non-fluent.
+fn pace_factor_from_ratios(mut ratios: Vec<f32>) -> f32 {
+    if ratios.len() < PACE_MIN_SAMPLES {
+        return 1.0;
+    }
+    ratios.sort_by(|a, b| a.total_cmp(b));
+    ratios[ratios.len() / 2].clamp(PACE_MIN, PACE_MAX)
 }
 
 fn section_short(section: taxonomy::Section) -> &'static str {
@@ -824,13 +920,83 @@ mod tests {
         let base = latency_for(ItemKind::Application);
         // tedious item: rc 5 + ct 5 -> 1.6x time budget
         let tags = vec!["mcat::rc::5".to_string(), "mcat::ct::5".to_string()];
-        let t = note_expected_latency(&tags, ItemKind::Application);
+        let t = note_expected_latency_unpaced(&tags, ItemKind::Application);
         assert_eq!(t.slow, (base.slow as f32 * 1.6) as u32);
         // untagged -> markers default to 3 -> flat thresholds
-        let t = note_expected_latency(&["mcat::cc::4B".to_string()], ItemKind::Application);
+        let t = note_expected_latency_unpaced(&["mcat::cc::4B".to_string()], ItemKind::Application);
         assert_eq!((t.fast, t.slow), (base.fast, base.slow));
         // leaf/cc components must not be misread as markers
         assert_eq!(marker_from_tags(&["mcat::cc::4".to_string()], &["ct"]), 3);
+    }
+
+    fn revlog_entry(ts_ms: i64, button: u8, interval: i32) -> RevlogEntry {
+        RevlogEntry {
+            id: crate::revlog::RevlogId(ts_ms),
+            cid: CardId(1),
+            usn: crate::types::Usn(0),
+            button_chosen: button,
+            interval,
+            last_interval: 0,
+            ease_factor: 0,
+            taken_millis: 4_000,
+            review_kind: RevlogReviewKind::Review,
+        }
+    }
+
+    #[test]
+    fn scheduled_days_comes_from_previous_interval() {
+        let entries = vec![
+            revlog_entry(0, 3, 3),
+            revlog_entry(3 * DAY_MS, 3, 7),
+            revlog_entry(10 * DAY_MS, 3, 14),
+        ];
+        let reviews = build_card_reviews(
+            &entries,
+            ItemKind::Flashcard,
+            false,
+            false,
+            latency_for(ItemKind::Flashcard),
+            3,
+            &HashSet::new(),
+        );
+        assert_eq!(reviews[0].scheduled_days, 0.0); // first review: no schedule
+        assert_eq!(reviews[1].scheduled_days, 3.0);
+        assert_eq!(reviews[2].scheduled_days, 7.0);
+    }
+
+    #[test]
+    fn wrong_first_mcq_attempt_is_not_productive_failure() {
+        let entries = vec![revlog_entry(0, 1, 0)];
+        let mcq = build_card_reviews(
+            &entries,
+            ItemKind::Application,
+            true,
+            false,
+            latency_for(ItemKind::Application),
+            3,
+            &HashSet::new(),
+        );
+        assert!(!mcq[0].productive_failure, "MCQ miss read as instruction");
+        let rote = build_card_reviews(
+            &entries,
+            ItemKind::Flashcard,
+            false,
+            false,
+            latency_for(ItemKind::Flashcard),
+            3,
+            &HashSet::new(),
+        );
+        assert!(rote[0].productive_failure);
+    }
+
+    #[test]
+    fn pace_factor_median_and_clamp() {
+        assert_eq!(pace_factor_from_ratios(vec![1.5; 5]), 1.0); // thin data
+        assert_eq!(pace_factor_from_ratios(vec![1.4; 25]), PACE_MAX); // clamped
+        assert_eq!(pace_factor_from_ratios(vec![0.5; 25]), PACE_MIN);
+        let mixed: Vec<f32> = (0..25).map(|i| 0.9 + 0.01 * i as f32).collect();
+        let f = pace_factor_from_ratios(mixed);
+        assert!((f - 1.02).abs() < 0.02, "median was {f}");
     }
 
     #[test]
