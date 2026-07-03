@@ -32,12 +32,12 @@ from anki.collection import OpChangesOnly, Progress, SearchNode
 from anki.decks import UpdateDeckConfigs, UpdateDeckConfigsMode
 from anki.scheduler.v3 import SchedulingStatesWithContext, SetSchedulingStatesRequest
 from anki.utils import dev_mode
+from aqt import lan_server
 from aqt.changenotetype import ChangeNotetypeDialog
 from aqt.deckoptions import DeckOptionsDialog
 from aqt.operations import on_op_finished
 from aqt.operations.deck import update_deck_configs as update_deck_configs_op
 from aqt.progress import ProgressUpdate
-from aqt import lan_server
 from aqt.qt import *
 from aqt.utils import aqt_data_path, show_warning, tr
 
@@ -379,15 +379,22 @@ def _handle_builtin_file_request(request: BundledFileRequest) -> Response:
         return _text_response(HTTPStatus.INTERNAL_SERVER_ERROR, str(error))
 
 
-@app.route("/<path:pathin>", methods=["GET", "POST"])
-def handle_request(pathin: str) -> Response:
-    lan_client = lan_server.has_lan_access(request.headers.get("Authorization"))
-    if lan_client:
+@app.before_request
+def _enforce_access_policy() -> None:
+    # Runs for every route (including /favicon.ico), so the LAN listener has
+    # no ungated endpoints. handle_request adds the authoritative media-only
+    # rule for LAN GETs after request extraction.
+    if lan_server.has_lan_access(request.headers.get("Authorization")):
         # phone client on the LAN: restricted to the MCAT API + media files
-        if not lan_server.lan_request_allowed(request.method, pathin):
-            logger.warning("denied LAN request: %s /%s", request.method, pathin)
+        if not lan_server.lan_request_allowed(
+            request.method, request.path.lstrip("/")
+        ):
+            logger.warning(
+                "denied LAN request: %s %s", request.method, request.path
+            )
             abort(403)
-    elif os.environ.get("ANKI_API_HOST") != "0.0.0.0":
+        return
+    if os.environ.get("ANKI_API_HOST") != "0.0.0.0":
         host = request.headers.get("Host", "").lower()
         origin = request.headers.get("Origin", "").lower()
         allowed_hosts = tuple(f"{h}:" for h in _LOCALHOST_HOSTS)
@@ -398,15 +405,20 @@ def handle_request(pathin: str) -> Response:
             logger.warning("denied non-local origin: %s", origin)
             abort(403)
 
-    req = _extract_request(pathin)
 
-    # Authoritative LAN media rule: mediasrv aliases sveltekit pages
+@app.route("/<path:pathin>", methods=["GET", "POST"])
+def handle_request(pathin: str) -> Response:
+    req = _extract_request(pathin)
+    logger.debug("%s /%s", flask.request.method, pathin)
+
+    # Authoritative LAN media rule (the coarse gate lives in
+    # _enforce_access_policy): mediasrv aliases sveltekit pages
     # (mcat/, graphs/, _app/, ...) to internal bundle paths during
     # extraction, so a raw-path filter cannot classify them. Serve LAN GETs
     # only when the request resolved to a collection-media file; NotFound
     # passes through so "collection not open"/missing files still 404.
     if (
-        lan_client
+        lan_server.has_lan_access(request.headers.get("Authorization"))
         and request.method == "GET"
         and not isinstance(req, NotFound)
         and not (
@@ -416,7 +428,6 @@ def handle_request(pathin: str) -> Response:
     ):
         logger.warning("denied LAN GET of non-media path: /%s", pathin)
         abort(403)
-    logger.debug("%s /%s", flask.request.method, pathin)
 
     try:
         if isinstance(req, NotFound):

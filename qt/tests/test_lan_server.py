@@ -253,3 +253,60 @@ class TestLanGate:
             "/_anki/pages/nonexistent", headers={"Host": "127.0.0.1:40000"}
         )
         assert resp.status_code == 404
+
+    def test_favicon_from_lan_without_token_denied(self, lan_active) -> None:
+        # /favicon.ico is its own Flask route; the before_request hook must
+        # still gate it so the LAN listener has no ungated endpoints.
+        resp = self._client().get(
+            "/favicon.ico", headers={"Host": "192.168.1.50:8045"}
+        )
+        assert resp.status_code == 403
+
+    def test_favicon_from_localhost_allowed(self, lan_active) -> None:
+        resp = self._client().get(
+            "/favicon.ico", headers={"Host": "127.0.0.1:40000"}
+        )
+        assert resp.status_code != 403
+
+
+class _StubBackend:
+    def __init__(self) -> None:
+        self.called_with: bytes | None = None
+
+    def compute_mcat_readiness_raw(self, data: bytes) -> bytes:
+        self.called_with = data
+        return b"\x08\x01"  # arbitrary non-empty protobuf-ish bytes
+
+
+class _StubCol:
+    def __init__(self) -> None:
+        self._backend = _StubBackend()
+
+
+class TestLanFineGrainedGrant:
+    """The MCAT RPCs must survive _check_dynamic_request_permissions, whose
+    new LAN branch grants access. With col=None the request 404s before that
+    check runs, so a truthy stub col is needed to exercise the grant path."""
+
+    @pytest.fixture
+    def lan_active_with_col(self, monkeypatch):
+        monkeypatch.setattr(lan_server, "_current", object())
+        monkeypatch.setattr(lan_server, "_current_token", "testtoken")
+        mw = _StubMw()
+        mw.col = _StubCol()
+        monkeypatch.setattr(aqt, "mw", mw)
+        yield "Bearer testtoken"
+
+    def test_mcat_rpc_granted_end_to_end(self, lan_active_with_col) -> None:
+        from aqt.mediasrv import app
+
+        resp = app.test_client().post(
+            "/_anki/computeMcatReadiness",
+            headers={
+                "Authorization": lan_active_with_col,
+                "Content-Type": "application/binary",
+            },
+            data=b"",
+        )
+        assert resp.status_code == 200
+        assert resp.data == b"\x08\x01"
