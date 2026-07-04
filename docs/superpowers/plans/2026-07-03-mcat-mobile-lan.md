@@ -4,7 +4,7 @@
 
 **Goal:** A phone (Expo Go / React Native) frontend for the MCAT dashboard/study/diagnostic flows, talking to the desktop app's existing Rust backend over Wi-Fi via a token-authenticated LAN listener started from a button on the desktop MCAT dashboard.
 
-**Architecture:** The desktop already serves the whole backend as `POST /_anki/{camelCaseMethod}` with binary-protobuf bodies (Flask/waitress "mediasrv", `qt/aqt/mediasrv.py`). We add a second waitress listener on `0.0.0.0:8045` serving the *same* Flask app, gated by a bearer token that only unlocks the 7 MCAT RPCs + media-file GETs. The phone app is a fresh standalone Expo project that generates protobuf classes from the same `proto/` dir and calls the same endpoints.
+**Architecture:** The desktop already serves the whole backend as `POST /_anki/{camelCaseMethod}` with binary-protobuf bodies (Flask/waitress "mediasrv", `qt/aqt/mediasrv.py`). We add a second waitress listener on `0.0.0.0:8045` serving the _same_ Flask app, gated by a bearer token that only unlocks the 7 MCAT RPCs + media-file GETs. The phone app is a fresh standalone Expo project that generates protobuf classes from the same `proto/` dir and calls the same endpoints.
 
 **Tech Stack:** Desktop: Python (Flask/waitress), protobuf (`frontend.proto`), Svelte 4-style components, `qrcode` npm package. Mobile: Expo (latest SDK, Expo Go-compatible), TypeScript, Expo Router, `@bufbuild/protobuf` v2 + `protoc-gen-es`, `expo-camera`, AsyncStorage, jest.
 
@@ -42,6 +42,7 @@ From the repo root `C:\AlphaAI\wk1to3\MCATspeedrun`:
 ## File Structure
 
 Desktop (`C:\AlphaAI\wk1to3\MCATspeedrun`):
+
 - Modify: `proto/anki/frontend.proto` — `LanServerStatus` message + 3 `FrontendService` RPCs (the build generates the TS wrappers in `out/ts/lib/generated/backend.ts` and Python classes in `out/pylib/anki/frontend_pb2.*`)
 - Create: `qt/aqt/lan_server.py` — LAN listener lifecycle + auth/allowlist policy (no imports from mediasrv; the Flask app is passed in)
 - Modify: `qt/aqt/mediasrv.py` — LAN gate in `handle_request` + `_check_dynamic_request_permissions`, and 3 post handlers
@@ -51,6 +52,7 @@ Desktop (`C:\AlphaAI\wk1to3\MCATspeedrun`):
 - Modify: `package.json` (repo root) — add `qrcode` + `@types/qrcode`
 
 Mobile (`C:\AlphaAI\wk1to3\mcat-mobile`, new):
+
 - `buf.gen.yaml` + `src/gen/**` (generated protobuf, committed)
 - `src/api/pairing.ts` — pairing payload parse/validate, `ServerConfig` type
 - `src/api/storage.ts` — AsyncStorage load/save/clear of `ServerConfig`
@@ -65,9 +67,11 @@ Mobile (`C:\AlphaAI\wk1to3\mcat-mobile`, new):
 ### Task 1: Proto contract — `LanServerStatus` + FrontendService RPCs
 
 **Files:**
+
 - Modify: `proto/anki/frontend.proto`
 
 **Interfaces:**
+
 - Produces: `FrontendService` RPCs `StartLanServer`, `StopLanServer`, `GetLanServerStatus` (all `generic.Empty` → `LanServerStatus`). After the build, TS gets `startLanServer/stopLanServer/getLanServerStatus` in `@generated/backend` returning `LanServerStatus { running: boolean; hostIp: string; port: number; token: string; error: string }` (from `@generated/anki/frontend_pb`), and Python gets `anki.frontend_pb2.LanServerStatus`. Tasks 3 and 4 rely on these exact names.
 
 - [ ] **Step 1: Add the RPCs and message**
@@ -75,12 +79,12 @@ Mobile (`C:\AlphaAI\wk1to3\mcat-mobile`, new):
 In `proto/anki/frontend.proto`, inside `service FrontendService` (after the `SaveCustomColours` rpc, line 32), add:
 
 ```proto
-  // Start the MCAT LAN API server (phone access); returns connection info.
-  rpc StartLanServer(generic.Empty) returns (LanServerStatus);
-  // Stop the MCAT LAN API server.
-  rpc StopLanServer(generic.Empty) returns (LanServerStatus);
-  // Current LAN server state, without changing it.
-  rpc GetLanServerStatus(generic.Empty) returns (LanServerStatus);
+// Start the MCAT LAN API server (phone access); returns connection info.
+rpc StartLanServer(generic.Empty) returns (LanServerStatus);
+// Stop the MCAT LAN API server.
+rpc StopLanServer(generic.Empty) returns (LanServerStatus);
+// Current LAN server state, without changing it.
+rpc GetLanServerStatus(generic.Empty) returns (LanServerStatus);
 ```
 
 At the bottom of the file (after `SetSchedulingStatesRequest`), add:
@@ -128,10 +132,12 @@ git commit -m "feat(proto): LAN server status/control RPCs for phone access"
 ### Task 2: `lan_server.py` — policy functions and listener lifecycle
 
 **Files:**
+
 - Create: `qt/aqt/lan_server.py`
 - Test: `qt/tests/test_lan_server.py`
 
 **Interfaces:**
+
 - Consumes: nothing from other tasks (deliberately does not import `aqt.mediasrv`; the Flask app is passed as an argument).
 - Produces (used by Task 3):
   - `DEFAULT_LAN_PORT: int = 8045`, `TOKEN_PROFILE_KEY: str = "mcatLanServerToken"`
@@ -399,9 +405,17 @@ class LanServer(threading.Thread):
         return int(self.server.effective_port)  # type: ignore[union-attr]
 
     def run(self) -> None:
+        # Tag every request served by this listener so the access policy can
+        # deny tokenless LAN requests outright. Without the tag they would fall
+        # through to the localhost Host/Origin allowance, which a LAN client can
+        # pass by spoofing Host: 127.0.0.1 — the two listeners share one app.
+        def tagged_app(environ, start_response):
+            environ["mcat.lan_listener"] = True
+            return self._app(environ, start_response)
+
         try:
             self.server = create_server(
-                self._app,
+                tagged_app,
                 host="0.0.0.0",
                 port=self._port,
                 clear_untrusted_proxy_headers=True,
@@ -488,10 +502,12 @@ git commit -m "feat: LAN server module with token + MCAT allowlist policy"
 ### Task 3: mediasrv integration — auth gate + start/stop/status handlers
 
 **Files:**
+
 - Modify: `qt/aqt/mediasrv.py` (gate at `handle_request` ~line 381; permissions at `_check_dynamic_request_permissions` ~line 820; handlers + `post_handler_list` ~line 708)
 - Test: `qt/tests/test_lan_server.py` (extend)
 
 **Interfaces:**
+
 - Consumes: everything in Task 2's Produces block, plus Task 1's `anki.frontend_pb2.LanServerStatus`.
 - Produces: HTTP handlers `startLanServer`, `stopLanServer`, `getLanServerStatus` callable by the desktop webview (Task 4 calls them via `@generated/backend`). LAN behavior contract used by Tasks 5–13: valid `Authorization: Bearer <lan token>` ⇒ allowlisted request proceeds, all other requests 403.
 
@@ -745,6 +761,15 @@ def _enforce_access_policy() -> None:
             logger.warning("denied LAN request to %s route", request.endpoint)
             abort(403)
         return
+    # No valid LAN token. A request that arrived on the LAN listener must be
+    # denied outright — it must NOT fall through to the localhost Host/Origin
+    # allowance below, which a LAN client could pass by spoofing
+    # `Host: 127.0.0.1`. Only the 127.0.0.1 listener (no tag) gets that path.
+    if request.environ.get("mcat.lan_listener"):
+        logger.warning(
+            "denied tokenless LAN request: %s %s", request.method, request.path
+        )
+        abort(403)
     if os.environ.get("ANKI_API_HOST") != "0.0.0.0":
         host = request.headers.get("Host", "").lower()
         origin = request.headers.get("Origin", "").lower()
@@ -792,11 +817,11 @@ still be exactly ONE `_extract_request` call)
 (c) In `_check_dynamic_request_permissions` (~line 835), after the `if _have_api_access(): return` block, add:
 
 ```python
-    # phone clients authenticated with the LAN token may call the MCAT API
-    if lan_server.has_lan_access(
-        request.headers.get("Authorization")
-    ) and lan_server.lan_request_allowed(request.method, request.path.lstrip("/")):
-        return
+# phone clients authenticated with the LAN token may call the MCAT API
+if lan_server.has_lan_access(
+    request.headers.get("Authorization")
+) and lan_server.lan_request_allowed(request.method, request.path.lstrip("/")):
+    return
 ```
 
 (d) Add the three handlers just above `post_handler_list` (~line 708):
@@ -837,9 +862,9 @@ def get_lan_server_status() -> bytes:
 (e) Add to `post_handler_list`:
 
 ```python
-    start_lan_server,
-    stop_lan_server,
-    get_lan_server_status,
+start_lan_server,
+stop_lan_server,
+get_lan_server_status,
 ```
 
 (`stringcase.camelcase` maps these to `startLanServer` / `stopLanServer` / `getLanServerStatus`, matching the proto RPC names.)
@@ -873,11 +898,13 @@ git commit -m "feat: expose MCAT API on LAN behind bearer token"
 ### Task 4: Desktop UI — "Phone access" button + modal with IP/port/QR
 
 **Files:**
+
 - Modify: `package.json` (repo root — add `qrcode`, `@types/qrcode`)
 - Create: `ts/routes/mcat/lib/LanServerModal.svelte`
 - Modify: `ts/routes/mcat/McatDashboard.svelte`
 
 **Interfaces:**
+
 - Consumes: `startLanServer`, `stopLanServer` from `@generated/backend`; `LanServerStatus` type from `@generated/anki/frontend_pb` (Task 1); server behavior from Task 3.
 - Produces: the pairing QR + copyable pairing code whose JSON payload `{"v":1,"host":...,"port":...,"token":...}` Task 7's parser must accept.
 
@@ -952,18 +979,32 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     async function copyCode(): Promise<void> {
-        await navigator.clipboard.writeText(pairingCode);
-        copied = true;
-        setTimeout(() => (copied = false), 1500);
+        try {
+            await navigator.clipboard.writeText(pairingCode);
+            copied = true;
+            setTimeout(() => (copied = false), 1500);
+        } catch {
+            // clipboard can reject (permissions/non-secure context); the code
+            // is still selectable in the input, so fail quietly.
+        }
+    }
+
+    function onWindowKeydown(e: KeyboardEvent): void {
+        // Attached to the window so Escape closes regardless of focus (the
+        // trigger button keeps focus and is outside .lan-overlay).
+        if (e.key === "Escape") {
+            dispatch("close");
+        }
     }
 </script>
+
+<svelte:window on:keydown={onWindowKeydown} />
 
 <div
     class="lan-overlay"
     role="button"
     tabindex="-1"
     on:click={() => dispatch("close")}
-    on:keydown={(e) => e.key === "Escape" && dispatch("close")}
 >
     <div
         class="lan-dialog"
@@ -1128,25 +1169,25 @@ In `ts/routes/mcat/McatDashboard.svelte`:
 Script additions (near the other `let` state, ~line 22):
 
 ```ts
-    import LanServerModal from "./lib/LanServerModal.svelte";
+import LanServerModal from "./lib/LanServerModal.svelte";
 
-    let lanOpen = false;
+let lanOpen = false;
 ```
 
 Template: in the `.actions` div (after the "Take diagnostic" button, ~line 166):
 
 ```svelte
-            <button class="secondary" on:click={() => (lanOpen = true)}>
-                Phone access
-            </button>
+<button class="secondary" on:click={() => (lanOpen = true)}>
+    Phone access
+</button>
 ```
 
 And after the `{#if confirmingReset}` block's `{/if}` (~line 215):
 
 ```svelte
-    {#if lanOpen}
-        <LanServerModal on:close={() => (lanOpen = false)} />
-    {/if}
+{#if lanOpen}
+    <LanServerModal on:close={() => (lanOpen = false)} />
+{/if}
 ```
 
 - [ ] **Step 4: Run the web gate**
@@ -1183,6 +1224,7 @@ git commit -m "feat: phone access modal with LAN address + pairing QR"
 **Files:** none (verification only; fix regressions in Tasks 2–4 if any check fails)
 
 **Interfaces:**
+
 - Consumes: running app with LAN server started (Task 4), pairing code from the modal.
 
 - [ ] **Step 1: Extract host/port/token from the pairing code**
@@ -1237,11 +1279,13 @@ In the running app: review a card / open the MCAT study page. Expected: unchange
 ### Task 6: Mobile scaffold — Expo project + protobuf codegen
 
 **Files:**
+
 - Create: `C:\AlphaAI\wk1to3\mcat-mobile` (new Expo project)
 - Create: `buf.gen.yaml`, npm script `gen:proto`
 - Generated: `src/gen/anki/*_pb.ts` (committed)
 
 **Interfaces:**
+
 - Produces: generated schemas used by Tasks 8+: `EmptySchema` (from `src/gen/anki/generic_pb`), and from `src/gen/anki/scheduler_pb`: `McatReadinessResponseSchema`, `McatStudyQueueRequestSchema`, `McatStudyQueueResponseSchema`, `AnswerMcatCardRequestSchema`, `AnswerMcatCardResponseSchema`, `AnswerMcatCardTypedRequestSchema`, `AnswerMcatCardTypedResponseSchema`, `McatDiagnosticRequestSchema`, plus types `McatStudyItem`, `McatLeafState`, `McatReadinessResponse` and enums `McatStudyItem_Kind`, `AnswerMcatCardTypedResponse_Verdict`. Field names are camelCase in TS (`cardId`, `leafName`, `readinessScore`, …); `int64 card_id` is TS `bigint`; `uint64 seed` is `bigint`.
 
 - [ ] **Step 1: Scaffold the project**
@@ -1279,16 +1323,16 @@ plugins:
 Add to `package.json` scripts:
 
 ```json
-    "gen:proto": "buf generate",
-    "test": "jest"
+"gen:proto": "buf generate",
+"test": "jest"
 ```
 
 and a jest config section (if the template didn't add one):
 
 ```json
-    "jest": {
-        "preset": "jest-expo"
-    }
+"jest": {
+    "preset": "jest-expo"
+}
 ```
 
 - [ ] **Step 4: Generate and verify**
@@ -1320,10 +1364,12 @@ git commit -m "feat: scaffold Expo app with protobuf codegen from MCATspeedrun p
 ### Task 7: Pairing payload parsing + config storage
 
 **Files:**
+
 - Create: `src/api/pairing.ts`, `src/api/storage.ts`
 - Test: `__tests__/pairing.test.ts`
 
 **Interfaces:**
+
 - Consumes: pairing JSON format from Task 4 (`{"v":1,"host","port","token"}`).
 - Produces (used by Tasks 8–13):
   - `interface ServerConfig { host: string; port: number; token: string }`
@@ -1360,7 +1406,9 @@ describe("parsePairingPayload", () => {
 
     it("rejects wrong version", () => {
         expect(() =>
-            parsePairingPayload(JSON.stringify({ v: 2, host: "h", port: 1, token: "t" })),
+            parsePairingPayload(
+                JSON.stringify({ v: 2, host: "h", port: 1, token: "t" }),
+            )
         ).toThrow(/version/i);
     });
 
@@ -1374,7 +1422,9 @@ describe("parsePairingPayload", () => {
 
     it("rejects out-of-range port", () => {
         expect(() =>
-            parsePairingPayload(JSON.stringify({ v: 1, host: "h", port: 70000, token: "t" })),
+            parsePairingPayload(
+                JSON.stringify({ v: 1, host: "h", port: 70000, token: "t" }),
+            )
         ).toThrow();
     });
 });
@@ -1413,7 +1463,9 @@ export function parsePairingPayload(raw: string): ServerConfig {
     try {
         data = JSON.parse(raw);
     } catch {
-        throw new Error("That doesn't look like a pairing code (invalid JSON).");
+        throw new Error(
+            "That doesn't look like a pairing code (invalid JSON).",
+        );
     }
     const obj = data as Record<string, unknown>;
     if (obj?.v !== 1) {
@@ -1424,10 +1476,10 @@ export function parsePairingPayload(raw: string): ServerConfig {
         throw new Error("Pairing code is missing the host address.");
     }
     if (
-        typeof port !== "number" ||
-        !Number.isInteger(port) ||
-        port < 1 ||
-        port > 65535
+        typeof port !== "number"
+        || !Number.isInteger(port)
+        || port < 1
+        || port > 65535
     ) {
         throw new Error("Pairing code has an invalid port.");
     }
@@ -1494,10 +1546,12 @@ git commit -m "feat: pairing payload parsing and server config storage"
 ### Task 8: API client — `callBackend` + 7 typed RPC wrappers
 
 **Files:**
+
 - Create: `src/api/client.ts`
 - Test: `__tests__/client.test.ts`
 
 **Interfaces:**
+
 - Consumes: `ServerConfig` (Task 7); generated schemas (Task 6).
 - Produces (used by Tasks 9–13):
   - `class ApiError extends Error { status: number }`
@@ -1515,7 +1569,10 @@ import { create, toBinary } from "@bufbuild/protobuf";
 import { McatReadinessResponseSchema } from "../src/gen/anki/scheduler_pb";
 
 const mockFetch = jest.fn();
-jest.mock("expo/fetch", () => ({ fetch: (...args: unknown[]) => mockFetch(...args) }));
+jest.mock(
+    "expo/fetch",
+    () => ({ fetch: (...args: unknown[]) => mockFetch(...args) }),
+);
 
 import { ApiError, computeMcatReadiness, mediaUrl } from "../src/api/client";
 
@@ -1526,7 +1583,10 @@ function okResponse(bytes: Uint8Array) {
         ok: true,
         status: 200,
         arrayBuffer: async () =>
-            bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+            bytes.buffer.slice(
+                bytes.byteOffset,
+                bytes.byteOffset + bytes.byteLength,
+            ),
         text: async () => "",
     };
 }
@@ -1539,7 +1599,9 @@ describe("computeMcatReadiness", () => {
             readinessScore: 501,
             readinessPct: 55,
         });
-        mockFetch.mockResolvedValue(okResponse(toBinary(McatReadinessResponseSchema, fixture)));
+        mockFetch.mockResolvedValue(
+            okResponse(toBinary(McatReadinessResponseSchema, fixture)),
+        );
 
         const resp = await computeMcatReadiness(CONFIG, {});
 
@@ -1571,7 +1633,9 @@ describe("computeMcatReadiness", () => {
 
 describe("mediaUrl", () => {
     it("builds a root-path URL", () => {
-        expect(mediaUrl(CONFIG, "img.jpg")).toBe("http://192.168.1.23:8045/img.jpg");
+        expect(mediaUrl(CONFIG, "img.jpg")).toBe(
+            "http://192.168.1.23:8045/img.jpg",
+        );
     });
 });
 ```
@@ -1590,7 +1654,11 @@ Create `src/api/client.ts`:
 
 ```ts
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
-import type { DescMessage, MessageInitShape, MessageShape } from "@bufbuild/protobuf";
+import type {
+    DescMessage,
+    MessageInitShape,
+    MessageShape,
+} from "@bufbuild/protobuf";
 import { fetch } from "expo/fetch";
 
 import { EmptySchema } from "../gen/anki/generic_pb";
@@ -1635,7 +1703,10 @@ export async function callBackend(
                 "Content-Type": "application/binary",
                 Authorization: `Bearer ${config.token}`,
             },
-            body,
+            // toBinary returns Uint8Array<ArrayBufferLike>; the DOM BodyInit
+            // type (TS 6.x) requires an ArrayBuffer-backed view. toBinary
+            // always allocates a fresh ArrayBuffer, so this cast is sound.
+            body: body as Uint8Array<ArrayBuffer>,
             signal: controller.signal,
         });
         if (!resp.ok) {
@@ -1711,7 +1782,7 @@ export function mediaHeaders(config: ServerConfig): { Authorization: string } {
 }
 ```
 
-Note: if `expo/fetch` rejects a `Uint8Array` body at runtime on-device (Task 9's round-trip will reveal it), change `body,` to `body: body.slice().buffer as ArrayBuffer,` — do not change the tests' `Uint8Array` assertion until confirmed on-device.
+Note: the `body: body as Uint8Array<ArrayBuffer>` cast satisfies the compiler and keeps a `Uint8Array` at runtime (so the test's `instanceof Uint8Array` assertion holds). If `expo/fetch` still rejects a `Uint8Array` body at runtime on-device (the on-device round-trip will reveal it), switch to `body: body.slice().buffer as ArrayBuffer,` and update the test's body assertion then — not before it's confirmed on-device.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -1733,11 +1804,13 @@ git commit -m "feat: binary-protobuf API client with typed MCAT RPC wrappers"
 ### Task 9: Connection context, Pair screen (QR scan + paste), app shell
 
 **Files:**
+
 - Create: `src/api/ConnectionContext.tsx`, `src/components/ErrorBanner.tsx`
 - Create/Replace: `app/_layout.tsx`, `app/index.tsx` (placeholder for Task 10), `app/pair.tsx`
 - Remove template screens the scaffold added (e.g. `app/(tabs)/` if present) so routes are exactly `/`, `/pair`, `/study`, `/diagnostic`.
 
 **Interfaces:**
+
 - Consumes: Tasks 7–8 modules.
 - Produces (used by Tasks 10–13):
   - `useConnection(): { config: ServerConfig | null; ready: boolean; pair(c: ServerConfig): Promise<void>; unpair(): Promise<void> }` via `<ConnectionProvider>` in the root layout
@@ -1753,7 +1826,11 @@ import { createContext, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
 import type { ServerConfig } from "./pairing";
-import { clearServerConfig, loadServerConfig, saveServerConfig } from "./storage";
+import {
+    clearServerConfig,
+    loadServerConfig,
+    saveServerConfig,
+} from "./storage";
 
 interface Connection {
     config: ServerConfig | null;
@@ -1874,9 +1951,15 @@ export default function RootLayout() {
         <ConnectionProvider>
             <Stack>
                 <Stack.Screen name="index" options={{ title: "MCAT" }} />
-                <Stack.Screen name="pair" options={{ title: "Pair with desktop" }} />
+                <Stack.Screen
+                    name="pair"
+                    options={{ title: "Pair with desktop" }}
+                />
                 <Stack.Screen name="study" options={{ title: "Study" }} />
-                <Stack.Screen name="diagnostic" options={{ title: "Diagnostic" }} />
+                <Stack.Screen
+                    name="diagnostic"
+                    options={{ title: "Diagnostic" }}
+                />
             </Stack>
         </ConnectionProvider>
     );
@@ -1900,7 +1983,9 @@ export default function Dashboard() {
         return <Redirect href="/pair" />;
     }
     return (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <View
+            style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
+        >
             <Text>Paired with {config.host}:{config.port}</Text>
         </View>
     );
@@ -1914,7 +1999,9 @@ import { Text, View } from "react-native";
 
 export default function Placeholder() {
     return (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <View
+            style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
+        >
             <Text>Coming soon</Text>
         </View>
     );
@@ -1975,18 +2062,20 @@ export default function Pair() {
                 On the desktop, open the MCAT dashboard and press “Phone
                 access”, then scan the QR code.
             </Text>
-            {permission?.granted ? (
-                <CameraView
-                    style={styles.camera}
-                    barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-                    onBarcodeScanned={({ data }) => connect(data)}
-                />
-            ) : (
-                <Button
-                    title="Allow camera to scan the QR code"
-                    onPress={requestPermission}
-                />
-            )}
+            {permission?.granted
+                ? (
+                    <CameraView
+                        style={styles.camera}
+                        barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+                        onBarcodeScanned={({ data }) => connect(data)}
+                    />
+                )
+                : (
+                    <Button
+                        title="Allow camera to scan the QR code"
+                        onPress={requestPermission}
+                    />
+                )}
             <Text style={styles.or}>…or paste the pairing code:</Text>
             <TextInput
                 style={styles.input}
@@ -2064,10 +2153,12 @@ git commit -m "feat: pairing flow with QR scan, paste fallback, connection conte
 ### Task 10: Dashboard screen
 
 **Files:**
+
 - Create: `src/components/MeterBar.tsx`
 - Replace: `app/index.tsx`
 
 **Interfaces:**
+
 - Consumes: `computeMcatReadiness`, `recomputeMcatLeafStates`, `ApiError` (Task 8); `useConnection`, `ErrorBanner` (Task 9); `McatReadinessResponse`, `McatLeafState` types (Task 6).
 - Produces: `<MeterBar value={number 0..1} />` reused by Tasks 11–12.
 
@@ -2115,11 +2206,18 @@ import {
     View,
 } from "react-native";
 
-import { ApiError, computeMcatReadiness, recomputeMcatLeafStates } from "../src/api/client";
+import {
+    ApiError,
+    computeMcatReadiness,
+    recomputeMcatLeafStates,
+} from "../src/api/client";
 import { useConnection } from "../src/api/ConnectionContext";
 import { ErrorBanner } from "../src/components/ErrorBanner";
 import { MeterBar } from "../src/components/MeterBar";
-import type { McatLeafState, McatReadinessResponse } from "../src/gen/anki/scheduler_pb";
+import type {
+    McatLeafState,
+    McatReadinessResponse,
+} from "../src/gen/anki/scheduler_pb";
 
 interface Section {
     label: string;
@@ -2143,7 +2241,9 @@ const pct = (x: number) => `${Math.round(x * 100)}%`;
 
 export default function Dashboard() {
     const { config, ready, unpair } = useConnection();
-    const [readiness, setReadiness] = useState<McatReadinessResponse | null>(null);
+    const [readiness, setReadiness] = useState<McatReadinessResponse | null>(
+        null,
+    );
     const [error, setError] = useState("");
     const [refreshing, setRefreshing] = useState(false);
 
@@ -2160,7 +2260,8 @@ export default function Dashboard() {
                 setReadiness(resp);
             } catch (err) {
                 setError(
-                    err instanceof ApiError && (err.status === 401 || err.status === 403)
+                    err instanceof ApiError
+                        && (err.status === 401 || err.status === 403)
                         ? "The desktop rejected this phone's pairing."
                         : "Couldn't reach the desktop.",
                 );
@@ -2211,31 +2312,40 @@ export default function Dashboard() {
                     <View style={styles.scoreCard}>
                         <Text style={styles.score}>
                             {readiness.readinessScore}
-                            <Text style={styles.scale}> / 528</Text>
+                            <Text style={styles.scale}>/ 528</Text>
                         </Text>
                         <Text style={styles.meta}>
-                            {Math.round(readiness.readinessPct)}% blueprint mastery ·
-                            ±{readiness.confidenceBand} pts ·{" "}
+                            {Math.round(readiness.readinessPct)}% blueprint
+                            mastery · ±{readiness.confidenceBand} pts ·{" "}
                             {Math.round(readiness.confidencePct)}% confidence
                         </Text>
                         <View style={styles.metricRow}>
                             <Text style={styles.metricLabel}>coverage</Text>
                             <MeterBar value={readiness.coverage} />
-                            <Text style={styles.metricVal}>{pct(readiness.coverage)}</Text>
+                            <Text style={styles.metricVal}>
+                                {pct(readiness.coverage)}
+                            </Text>
                         </View>
                         <View style={styles.metricRow}>
                             <Text style={styles.metricLabel}>depth</Text>
                             <MeterBar value={readiness.depth} />
-                            <Text style={styles.metricVal}>{pct(readiness.depth)}</Text>
+                            <Text style={styles.metricVal}>
+                                {pct(readiness.depth)}
+                            </Text>
                         </View>
                         <View style={styles.metricRow}>
                             <Text style={styles.metricLabel}>freshness</Text>
                             <MeterBar value={readiness.freshness} />
-                            <Text style={styles.metricVal}>{pct(readiness.freshness)}</Text>
+                            <Text style={styles.metricVal}>
+                                {pct(readiness.freshness)}
+                            </Text>
                         </View>
                     </View>
                     <View style={styles.actions}>
-                        <Button title="Study now" onPress={() => router.push("/study")} />
+                        <Button
+                            title="Study now"
+                            onPress={() => router.push("/study")}
+                        />
                         <Button
                             title="Take diagnostic"
                             onPress={() => router.push("/diagnostic")}
@@ -2243,18 +2353,28 @@ export default function Dashboard() {
                     </View>
                     {groupBySection(readiness.leaves).map((section) => (
                         <View key={section.label} style={styles.section}>
-                            <Text style={styles.sectionLabel}>{section.label}</Text>
+                            <Text style={styles.sectionLabel}>
+                                {section.label}
+                            </Text>
                             {section.leaves.map((leaf) => (
                                 <View
                                     key={leaf.leafId}
-                                    style={[styles.leaf, !leaf.assessed && styles.unassessed]}
+                                    style={[
+                                        styles.leaf,
+                                        !leaf.assessed && styles.unassessed,
+                                    ]}
                                 >
-                                    <Text style={styles.leafName} numberOfLines={2}>
+                                    <Text
+                                        style={styles.leafName}
+                                        numberOfLines={2}
+                                    >
                                         {leaf.name}
                                     </Text>
                                     {!leaf.isCars && (
                                         <View style={styles.metricRow}>
-                                            <Text style={styles.metricLabel}>fluency</Text>
+                                            <Text style={styles.metricLabel}>
+                                                fluency
+                                            </Text>
                                             <MeterBar value={leaf.fluency} />
                                             <Text style={styles.metricVal}>
                                                 {pct(leaf.fluency)}
@@ -2262,7 +2382,9 @@ export default function Dashboard() {
                                         </View>
                                     )}
                                     <View style={styles.metricRow}>
-                                        <Text style={styles.metricLabel}>application</Text>
+                                        <Text style={styles.metricLabel}>
+                                            application
+                                        </Text>
                                         <MeterBar value={leaf.application} />
                                         <Text style={styles.metricVal}>
                                             {pct(leaf.application)}
@@ -2337,14 +2459,17 @@ git commit -m "feat: mobile dashboard with readiness score and leaf mastery"
 ### Task 11: Study screen (MCQ + typed flashcards + images)
 
 **Files:**
+
 - Create: `src/components/McqCard.tsx`, `src/components/TypedFlashcard.tsx`
 - Replace: `app/study.tsx`
 
 **Interfaces:**
+
 - Consumes: `getMcatStudyQueue`, `answerMcatCard`, `answerMcatCardTyped`, `mediaUrl`, `mediaHeaders` (Task 8); `useConnection`, `ErrorBanner` (Task 9); `McatStudyItem`, `McatStudyItem_Kind`, `AnswerMcatCardTypedResponse_Verdict` (Task 6). `item.cardId` is `bigint` — pass through as-is to answer requests.
 - Produces: `<McqCard item config showFeedback onAnswered(correct) />` reused by Task 12.
 
 Behavior contract (mirrors `ts/routes/mcat/study/StudyPage.svelte`):
+
 - MCQ: stem = `item.front`; if `item.image` non-empty, show image (letters-only choices); choices A–D from `item.choices`; extra "I don't know" always grades incorrect; on choose → `answerMcatCard({ cardId, correct: letter === item.answer, millisecondsTaken, selfRating: 0 })`; then (when `showFeedback`) reveal correct/incorrect + `item.explanation`; Next advances.
 - Flashcard: prompt = `item.front`; TextInput answer; Submit → `answerMcatCardTyped({ cardId, typedAnswer, millisecondsTaken, gaveUp: false })`; "I don't know" or empty submit → `gaveUp: true`. Block until verdict (spinner); on API error keep the same submission and show Retry (no self-grade fallback); on verdict show Correct/Partial/Incorrect + `feedback` + `item.back`; Next advances.
 - `millisecondsTaken`: from card shown to first submit, capped at 10 minutes.
@@ -2354,7 +2479,7 @@ Behavior contract (mirrors `ts/routes/mcat/study/StudyPage.svelte`):
 Create `src/components/McqCard.tsx`:
 
 ```tsx
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { answerMcatCard, mediaHeaders, mediaUrl } from "../api/client";
@@ -2379,6 +2504,9 @@ export function McqCard({
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
     const [startedAt] = useState(() => Date.now());
+    // Frozen on the first attempt so a failed-then-retried submit doesn't
+    // inflate millisecondsTaken — the MCQ FSRS grade is derived from it.
+    const submittedMsRef = useRef<number | null>(null);
     const lettersOnly = item.image !== "";
 
     async function choose(letter: string, idk: boolean): Promise<void> {
@@ -2388,17 +2516,23 @@ export function McqCard({
         setBusy(true);
         setError("");
         const correct = !idk && letter === item.answer;
+        const ms =
+            submittedMsRef.current ??
+            Math.min(Date.now() - startedAt, 10 * 60 * 1000);
+        submittedMsRef.current = ms;
         try {
             await answerMcatCard(config, {
                 cardId: item.cardId,
                 correct,
-                millisecondsTaken: Math.min(Date.now() - startedAt, 10 * 60 * 1000),
+                millisecondsTaken: ms,
                 selfRating: 0,
             });
             setChosen(idk ? "__idk__" : letter);
             onAnswered(correct);
         } catch {
-            setError("Couldn't submit the answer — check the connection and tap a choice again.");
+            setError(
+                "Couldn't submit the answer — check the connection and tap a choice again.",
+            );
         } finally {
             setBusy(false);
         }
@@ -2417,7 +2551,10 @@ export function McqCard({
                 <Image
                     style={styles.image}
                     resizeMode="contain"
-                    source={{ uri: mediaUrl(config, item.image), headers: mediaHeaders(config) }}
+                    source={{
+                        uri: mediaUrl(config, item.image),
+                        headers: mediaHeaders(config),
+                    }}
                 />
             )}
             {item.choices.map((choice, i) => {
@@ -2430,8 +2567,10 @@ export function McqCard({
                         disabled={answered || busy}
                         style={[
                             styles.choice,
-                            answered && showFeedback && isAnswer && styles.correctChoice,
-                            answered && showFeedback && isChosen && !isAnswer && styles.wrongChoice,
+                            answered && showFeedback && isAnswer
+                            && styles.correctChoice,
+                            answered && showFeedback && isChosen && !isAnswer
+                            && styles.wrongChoice,
                         ]}
                         onPress={() => choose(letter, false)}
                     >
@@ -2458,11 +2597,13 @@ export function McqCard({
                         {chosen === "__idk__"
                             ? `Didn't know — answer: ${item.answer}`
                             : wasCorrect
-                              ? "Correct"
-                              : `Incorrect — answer: ${item.answer}`}
+                            ? "Correct"
+                            : `Incorrect — answer: ${item.answer}`}
                     </Text>
                     {item.explanation !== "" && (
-                        <Text style={styles.explanation}>{item.explanation}</Text>
+                        <Text style={styles.explanation}>
+                            {item.explanation}
+                        </Text>
                     )}
                 </View>
             )}
@@ -2474,7 +2615,12 @@ const styles = StyleSheet.create({
     card: { gap: 10 },
     leaf: { fontSize: 12, color: "#888" },
     stem: { fontSize: 16, lineHeight: 23 },
-    image: { width: "100%", height: 260, borderRadius: 8, backgroundColor: "#fff" },
+    image: {
+        width: "100%",
+        height: 260,
+        borderRadius: 8,
+        backgroundColor: "#fff",
+    },
     choice: {
         borderWidth: 1,
         borderColor: "#8886",
@@ -2538,10 +2684,9 @@ export function TypedFlashcard({
         if (phase === "grading" || phase === "graded") {
             return;
         }
-        const ms =
-            phase === "prompt"
-                ? Math.min(Date.now() - startedAt, 10 * 60 * 1000)
-                : submittedMs; // retries reuse the first-submit latency
+        const ms = phase === "prompt"
+            ? Math.min(Date.now() - startedAt, 10 * 60 * 1000)
+            : submittedMs; // retries reuse the first-submit latency
         setSubmittedMs(ms);
         const didGiveUp = giveUp || typed.trim().length === 0;
         setGaveUp(didGiveUp);
@@ -2567,10 +2712,10 @@ export function TypedFlashcard({
     const verdictLabel = gaveUp
         ? "Didn't know — marked Again"
         : verdict === Verdict.CORRECT
-          ? "Correct"
-          : verdict === Verdict.PARTIAL
-            ? "Partially correct"
-            : "Incorrect";
+        ? "Correct"
+        : verdict === Verdict.PARTIAL
+        ? "Partially correct"
+        : "Incorrect";
 
     return (
         <View style={styles.card}>
@@ -2593,13 +2738,22 @@ export function TypedFlashcard({
                             <Text style={styles.error}>
                                 Grading failed: {gradeError}
                             </Text>
-                            <Button title="Retry grading" onPress={() => submit(gaveUp)} />
+                            <Button
+                                title="Retry grading"
+                                onPress={() => submit(gaveUp)}
+                            />
                         </View>
                     )}
                     {phase === "prompt" && (
                         <View style={styles.row}>
-                            <Button title="Submit" onPress={() => submit(false)} />
-                            <Button title="I don't know" onPress={() => submit(true)} />
+                            <Button
+                                title="Submit"
+                                onPress={() => submit(false)}
+                            />
+                            <Button
+                                title="I don't know"
+                                onPress={() => submit(true)}
+                            />
                         </View>
                     )}
                 </>
@@ -2613,7 +2767,9 @@ export function TypedFlashcard({
             {phase === "graded" && (
                 <View style={styles.feedbackBox}>
                     <Text style={styles.verdict}>{verdictLabel}</Text>
-                    {feedback !== "" && <Text style={styles.llmNote}>{feedback}</Text>}
+                    {feedback !== "" && (
+                        <Text style={styles.llmNote}>{feedback}</Text>
+                    )}
                     <Text style={styles.back}>{item.back}</Text>
                 </View>
             )}
@@ -2728,27 +2884,29 @@ export default function Study() {
                     <Text style={styles.progress}>
                         {index + 1} / {items!.length}
                     </Text>
-                    {item.kind === McatStudyItem_Kind.MCQ ? (
-                        <McqCard
-                            key={item.cardId.toString()}
-                            item={item}
-                            config={config}
-                            showFeedback
-                            onAnswered={(correct) => {
-                                if (correct) {
-                                    setCorrectCount((c) => c + 1);
-                                }
-                                setAnswered(true);
-                            }}
-                        />
-                    ) : (
-                        <TypedFlashcard
-                            key={item.cardId.toString()}
-                            item={item}
-                            config={config}
-                            onGraded={() => setAnswered(true)}
-                        />
-                    )}
+                    {item.kind === McatStudyItem_Kind.MCQ
+                        ? (
+                            <McqCard
+                                key={item.cardId.toString()}
+                                item={item}
+                                config={config}
+                                showFeedback
+                                onAnswered={(correct) => {
+                                    if (correct) {
+                                        setCorrectCount((c) => c + 1);
+                                    }
+                                    setAnswered(true);
+                                }}
+                            />
+                        )
+                        : (
+                            <TypedFlashcard
+                                key={item.cardId.toString()}
+                                item={item}
+                                config={config}
+                                onGraded={() => setAnswered(true)}
+                            />
+                        )}
                     {answered && <Button title="Next" onPress={next} />}
                 </>
             )}
@@ -2756,10 +2914,15 @@ export default function Study() {
                 <View style={styles.summary}>
                     <Text style={styles.summaryHead}>Session complete</Text>
                     <Text>
-                        {correctCount} MCQ{correctCount === 1 ? "" : "s"} correct out of{" "}
-                        {items!.filter((i) => i.kind === McatStudyItem_Kind.MCQ).length}
+                        {correctCount} MCQ{correctCount === 1 ? "" : "s"}{" "}
+                        correct out of{" "}
+                        {items!.filter((i) => i.kind === McatStudyItem_Kind.MCQ)
+                            .length}
                     </Text>
-                    <Button title="Back to dashboard" onPress={() => router.back()} />
+                    <Button
+                        title="Back to dashboard"
+                        onPress={() => router.back()}
+                    />
                     <Button title="New session" onPress={load} />
                 </View>
             )}
@@ -2800,9 +2963,11 @@ git commit -m "feat: mobile study session with MCQs, typed grading, images"
 ### Task 12: Diagnostic screen
 
 **Files:**
+
 - Replace: `app/diagnostic.tsx`
 
 **Interfaces:**
+
 - Consumes: `getMcatDiagnostic`, `computeMcatReadiness`, `recomputeMcatLeafStates` (Task 8); `McqCard` with `showFeedback={false}` (Task 11); `useConnection`, `ErrorBanner` (Task 9).
 
 Behavior contract (mirrors `ts/routes/mcat/diagnostic/`): intro (count choice, `questionCount: 0` = backend default 120, `seed: 0n`) with pre-exam readiness snapshot → exam (MCQs, **no per-question feedback**, answers submitted as you go) → results (`recomputeMcatLeafStates` once at the end; show correct count, per-section tallies, and before → after readiness delta).
@@ -2843,7 +3008,9 @@ export default function Diagnostic() {
     const [items, setItems] = useState<McatStudyItem[]>([]);
     const [index, setIndex] = useState(0);
     const [answered, setAnswered] = useState(false);
-    const [tallies, setTallies] = useState(new Map<string, { correct: number; total: number }>());
+    const [tallies, setTallies] = useState(
+        new Map<string, { correct: number; total: number }>(),
+    );
     const [before, setBefore] = useState<McatReadinessResponse | null>(null);
     const [after, setAfter] = useState<McatReadinessResponse | null>(null);
     const [error, setError] = useState("");
@@ -2859,7 +3026,9 @@ export default function Diagnostic() {
                 computeMcatReadiness(config, {}),
             ]);
             if (diag.items.length === 0) {
-                setError("No MCAT questions found — import content on the desktop first.");
+                setError(
+                    "No MCAT questions found — import content on the desktop first.",
+                );
                 return;
             }
             setBefore(snapshot);
@@ -2893,12 +3062,18 @@ export default function Diagnostic() {
             return;
         }
         setPhase("submitting");
+        setError("");
         try {
             setAfter(await recomputeMcatLeafStates(config!, {}));
             setPhase("results");
         } catch {
-            setError("Couldn't compute results — check the connection and try again.");
-            setPhase("exam"); // stay on the last card; Finish can be retried
+            setError(
+                "Couldn't compute results — check the connection and try again.",
+            );
+            // Stay in "submitting" (NOT "exam"): reverting to the exam phase
+            // remounts the already-answered last card as answerable, so a tap
+            // would submit a duplicate grade + inflate the tally. The error
+            // banner's Retry re-runs next() to re-attempt scoring.
         }
     }
 
@@ -2911,7 +3086,10 @@ export default function Diagnostic() {
 
     const item = items[index];
     const totals = [...tallies.values()].reduce(
-        (acc, t) => ({ correct: acc.correct + t.correct, total: acc.total + t.total }),
+        (acc, t) => ({
+            correct: acc.correct + t.correct,
+            total: acc.total + t.total,
+        }),
         { correct: 0, total: 0 },
     );
 
@@ -2931,11 +3109,16 @@ export default function Diagnostic() {
                 <View style={styles.intro}>
                     <Text style={styles.head}>Diagnostic exam</Text>
                     <Text style={styles.body}>
-                        Blueprint-stratified MCQs across all sections. No feedback
-                        until the end — it calibrates your readiness score.
+                        Blueprint-stratified MCQs across all sections. No
+                        feedback until the end — it calibrates your readiness
+                        score.
                     </Text>
                     {COUNT_CHOICES.map((c) => (
-                        <Button key={c.label} title={c.label} onPress={() => begin(c.count)} />
+                        <Button
+                            key={c.label}
+                            title={c.label}
+                            onPress={() => begin(c.count)}
+                        />
                     ))}
                 </View>
             )}
@@ -2959,7 +3142,7 @@ export default function Diagnostic() {
                     )}
                 </>
             )}
-            {phase === "submitting" && <Text>Scoring…</Text>}
+            {phase === "submitting" && error === "" && <Text>Scoring…</Text>}
             {phase === "results" && after && (
                 <View style={styles.results}>
                     <Text style={styles.head}>Results</Text>
@@ -2973,10 +3156,14 @@ export default function Diagnostic() {
                     ))}
                     {before && (
                         <Text style={styles.delta}>
-                            Readiness: {before.readinessScore} → {after.readinessScore} / 528
+                            Readiness: {before.readinessScore} →{" "}
+                            {after.readinessScore} / 528
                         </Text>
                     )}
-                    <Button title="Back to dashboard" onPress={() => router.back()} />
+                    <Button
+                        title="Back to dashboard"
+                        onPress={() => router.back()}
+                    />
                 </View>
             )}
         </ScrollView>
@@ -3020,9 +3207,11 @@ git commit -m "feat: mobile diagnostic exam with results and readiness delta"
 ### Task 13: Final end-to-end verification + README
 
 **Files:**
+
 - Create: `README.md` (in `mcat-mobile`)
 
 **Interfaces:**
+
 - Consumes: everything above.
 
 - [ ] **Step 1: Write the README**
