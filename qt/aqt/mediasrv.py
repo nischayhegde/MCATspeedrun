@@ -386,17 +386,22 @@ def _enforce_access_policy() -> None:
     # rule for LAN GETs after request extraction.
     if lan_server.has_lan_access(request.headers.get("Authorization")):
         # phone client on the LAN: restricted to the MCAT API + media files
-        if not lan_server.lan_request_allowed(
-            request.method, request.path.lstrip("/")
-        ):
-            logger.warning(
-                "denied LAN request: %s %s", request.method, request.path
-            )
+        if not lan_server.lan_request_allowed(request.method, request.path.lstrip("/")):
+            logger.warning("denied LAN request: %s %s", request.method, request.path)
             abort(403)
         if request.endpoint != "handle_request":
             logger.warning("denied LAN request to %s route", request.endpoint)
             abort(403)
         return
+    # No valid LAN token. A request that arrived on the LAN listener must be
+    # denied outright — it must NOT fall through to the localhost Host/Origin
+    # allowance below, which a LAN client could pass by spoofing
+    # `Host: 127.0.0.1`. Only the 127.0.0.1 listener (no tag) gets that path.
+    if request.environ.get("mcat.lan_listener"):
+        logger.warning(
+            "denied tokenless LAN request: %s %s", request.method, request.path
+        )
+        abort(403)
     if os.environ.get("ANKI_API_HOST") != "0.0.0.0":
         host = request.headers.get("Host", "").lower()
         origin = request.headers.get("Origin", "").lower()
@@ -425,8 +430,7 @@ def handle_request(pathin: str) -> Response:
         and request.method == "GET"
         and not isinstance(req, NotFound)
         and not (
-            isinstance(req, LocalFileRequest)
-            and req.root == aqt.mw.col.media.dir()
+            isinstance(req, LocalFileRequest) and req.root == aqt.mw.col.media.dir()
         )
     ):
         logger.warning("denied LAN GET of non-media path: /%s", pathin)

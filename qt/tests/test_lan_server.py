@@ -257,15 +257,11 @@ class TestLanGate:
     def test_favicon_from_lan_without_token_denied(self, lan_active) -> None:
         # /favicon.ico is its own Flask route; the before_request hook must
         # still gate it so the LAN listener has no ungated endpoints.
-        resp = self._client().get(
-            "/favicon.ico", headers={"Host": "192.168.1.50:8045"}
-        )
+        resp = self._client().get("/favicon.ico", headers={"Host": "192.168.1.50:8045"})
         assert resp.status_code == 403
 
     def test_favicon_from_localhost_allowed(self, lan_active) -> None:
-        resp = self._client().get(
-            "/favicon.ico", headers={"Host": "127.0.0.1:40000"}
-        )
+        resp = self._client().get("/favicon.ico", headers={"Host": "127.0.0.1:40000"})
         assert resp.status_code != 403
 
     def test_favicon_from_lan_with_token_denied(self, lan_active) -> None:
@@ -277,6 +273,54 @@ class TestLanGate:
             headers={"Host": "192.168.1.50:8045", "Authorization": lan_active},
         )
         assert resp.status_code == 403
+
+    def test_lan_listener_tokenless_media_denied_despite_localhost_host(
+        self, lan_active
+    ) -> None:
+        # The exact bypass: a LAN client (tagged) with no token spoofing a
+        # localhost Host must be denied, not served media.
+        resp = self._client().get(
+            "/some-image.jpg",
+            headers={"Host": "127.0.0.1:8045"},
+            environ_overrides={"mcat.lan_listener": True},
+        )
+        assert resp.status_code == 403
+
+    def test_lan_listener_tokenless_whitelist_rpc_denied(self, lan_active) -> None:
+        # setSchedulingStates is a state-mutating reviewer-whitelist RPC that
+        # needs no _APIKEY from localhost; a tokenless LAN client must not reach it.
+        resp = self._client().post(
+            "/_anki/setSchedulingStates",
+            headers={
+                "Host": "127.0.0.1:8045",
+                "Content-Type": "application/binary",
+            },
+            environ_overrides={"mcat.lan_listener": True},
+        )
+        assert resp.status_code == 403
+
+    def test_localhost_listener_untagged_still_allows_localhost_host(
+        self, lan_active
+    ) -> None:
+        # No tag = the 127.0.0.1 listener; localhost Host still accepted (no regression).
+        resp = self._client().get(
+            "/_anki/pages/nonexistent", headers={"Host": "127.0.0.1:40000"}
+        )
+        assert resp.status_code != 403
+
+    def test_lan_listener_with_valid_token_still_allowed(self, lan_active) -> None:
+        # The tag must not break a properly-paired phone: valid token + MCAT
+        # method passes the gate (col=None -> 404, not 403).
+        resp = self._client().post(
+            "/_anki/computeMcatReadiness",
+            headers={
+                "Host": "192.168.1.50:8045",
+                "Authorization": lan_active,
+                "Content-Type": "application/binary",
+            },
+            environ_overrides={"mcat.lan_listener": True},
+        )
+        assert resp.status_code == 404
 
 
 class _StubBackend:

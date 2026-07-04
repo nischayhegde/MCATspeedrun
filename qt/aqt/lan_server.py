@@ -102,9 +102,17 @@ class LanServer(threading.Thread):
         return int(self.server.effective_port)  # type: ignore[union-attr]
 
     def run(self) -> None:
+        # Tag every request served by this listener so the access policy can
+        # deny tokenless LAN requests outright. Without the tag they would fall
+        # through to the localhost Host/Origin allowance, which a LAN client can
+        # pass by spoofing Host: 127.0.0.1 — the two listeners share one app.
+        def tagged_app(environ, start_response):
+            environ["mcat.lan_listener"] = True
+            return self._app(environ, start_response)
+
         try:
             self.server = create_server(
-                self._app,
+                tagged_app,
                 host="0.0.0.0",
                 port=self._port,
                 clear_untrusted_proxy_headers=True,
