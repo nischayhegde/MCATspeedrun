@@ -439,8 +439,6 @@ impl crate::services::SchedulerService for Collection {
 /// leaf with its blueprint metadata (name/section/weight) and computing
 /// mastery.
 fn build_mcat_readiness(col: &mut Collection) -> Result<scheduler::McatReadinessResponse> {
-    use std::collections::HashMap;
-
     use crate::mcat::model::LeafState;
     use crate::mcat::scoring;
     use crate::mcat::taxonomy;
@@ -455,18 +453,14 @@ fn build_mcat_readiness(col: &mut Collection) -> Result<scheduler::McatReadiness
         }
     }
 
-    let states: HashMap<String, LeafState> = col
-        .mcat_leaf_states()?
-        .into_iter()
-        .map(|s| (s.id.clone(), s))
-        .collect();
-    let readiness = scoring::readiness(&states);
-    let confidence = scoring::confidence(&states);
+    let bundle = col.mcat_readiness()?;
+    let ready = bundle.give_up_reason.is_none();
 
     let leaves = taxonomy::leaves()
         .into_iter()
         .map(|leaf| {
-            let s = states
+            let s = bundle
+                .states
                 .get(leaf.id)
                 .cloned()
                 .unwrap_or_else(|| LeafState::empty(leaf.id));
@@ -478,9 +472,7 @@ fn build_mcat_readiness(col: &mut Collection) -> Result<scheduler::McatReadiness
                 weight: leaf.weight,
                 fluency: s.fluency,
                 application: s.application,
-                // evidence-shrunk mastery: this is what the readiness roll-up
-                // actually uses, so the per-leaf display matches it
-                mastery: scoring::mastery_adjusted(&leaf, &s, &states),
+                mastery: scoring::mastery_adjusted(&leaf, &s, &bundle.states),
                 attempts: s.attempts.round() as u32,
                 freshness: s.freshness,
                 assessed: s.assessed,
@@ -489,15 +481,37 @@ fn build_mcat_readiness(col: &mut Collection) -> Result<scheduler::McatReadiness
         })
         .collect();
 
+    let (readiness_pct, readiness_score, confidence_pct, confidence_band, range_low, range_high) =
+        if ready {
+            let band = bundle.confidence.band;
+            (
+                bundle.readiness.pct,
+                bundle.readiness.score,
+                bundle.confidence.pct,
+                band,
+                (bundle.readiness.score - band).clamp(472, 528),
+                (bundle.readiness.score + band).clamp(472, 528),
+            )
+        } else {
+            (0.0, 0, 0.0, 0, 0, 0)
+        };
+
     Ok(scheduler::McatReadinessResponse {
-        readiness_pct: readiness.pct,
-        readiness_score: readiness.score,
-        confidence_pct: confidence.pct,
-        coverage: confidence.coverage,
-        depth: confidence.depth,
-        freshness: confidence.freshness,
-        confidence_band: confidence.band,
+        readiness_pct,
+        readiness_score,
+        confidence_pct,
+        coverage: bundle.confidence.coverage,
+        depth: bundle.confidence.depth,
+        freshness: bundle.confidence.freshness,
+        confidence_band,
         leaves,
+        ready,
+        not_ready_reason: bundle.give_up_reason.unwrap_or_default(),
+        range_low,
+        range_high,
+        last_updated_ms: TimestampMillis::now().0,
+        reasons: bundle.reasons,
+        total_graded_reviews: bundle.total_reviews,
     })
 }
 

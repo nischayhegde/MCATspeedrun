@@ -636,4 +636,22 @@ message McatReadinessResponse {
   // +/- points band on the 472..528 scale.
   int32 confidence_band = 7;
   repeated McatLeafState leaves = 8;
+  // False when the give-up rule blocks scoring; all numeric fields above
+  // are 0 and `reasons` is empty in that case. Clients must check this
+  // before rendering any of the score fields.
+  bool ready = 9;
+  // Empty when ready; otherwise the exact reason a score isn't shown yet.
+  string not_ready_reason = 10;
+  // Likely range on the 472..528 scale (score -/+ confidence_band, clamped).
+  // 0 when not ready.
+  int32 range_low = 11;
+  int32 range_high = 12;
+  // Epoch ms when this estimate was computed.
+  int64 last_updated_ms = 13;
+  // Up to 3 lines naming the weakest contributing subtopics. Empty when
+  // not ready.
+  repeated string reasons = 14;
+  // Total graded MCAT reviews recorded so far (numerator of the give-up
+  // rule's review-count check).
+  uint32 total_graded_reviews = 15;
 }
