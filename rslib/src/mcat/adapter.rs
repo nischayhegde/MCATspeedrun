@@ -1056,6 +1056,42 @@ mod tests {
     }
 
     #[test]
+    fn answering_an_mcat_card_can_be_undone() {
+        let mut col = Collection::new();
+        let mut note = NoteAdder::basic(&mut col)
+            .fields(&["Glycolysis", "Splits glucose into two pyruvate"])
+            .add(&mut col);
+        note.tags.push("mcat::cc::1D".into());
+        col.update_note(&mut note).unwrap();
+        let card = col.get_first_card();
+        let before = col.storage.get_card(card.id).unwrap().unwrap();
+
+        col.mcat_answer_card(card.id, true, 4_000, 3).unwrap();
+        let after_answer = col.storage.get_card(card.id).unwrap().unwrap();
+        assert_ne!(
+            before.due, after_answer.due,
+            "answering should have changed scheduling"
+        );
+        assert_eq!(col.mcat_total_graded_reviews(), 1);
+
+        col.undo().unwrap();
+
+        let after_undo = col.storage.get_card(card.id).unwrap().unwrap();
+        assert_eq!(
+            before.due, after_undo.due,
+            "undo should restore pre-answer scheduling"
+        );
+        assert_eq!(before.queue, after_undo.queue);
+        let entries = col.storage.get_revlog_entries_for_card(card.id).unwrap();
+        assert!(entries.is_empty(), "undo should remove the revlog row too");
+        assert_eq!(
+            col.mcat_total_graded_reviews(),
+            0,
+            "the give-up-rule counter must roll back with everything else"
+        );
+    }
+
+    #[test]
     fn mcat_readiness_bundle_reports_give_up_reason_cold() {
         let col = Collection::new();
         let bundle = col.mcat_readiness().unwrap();
