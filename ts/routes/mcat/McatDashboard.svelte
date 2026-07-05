@@ -5,7 +5,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 <script lang="ts">
     import { onMount } from "svelte";
 
-    import { goto } from "$app/navigation";
+    import { goto, invalidate } from "$app/navigation";
 
     import type {
         McatLeafState,
@@ -39,6 +39,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         resetting = true;
         try {
             readiness = await resetMcatProgress({});
+            // Drop the cached diagnostic so the next attempt draws a fresh,
+            // newly-seeded question set instead of replaying the last one.
+            await invalidate("mcat:diagnostic");
             confirmingReset = false;
         } finally {
             resetting = false;
@@ -192,7 +195,14 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             >
                 Study now
             </button>
-            <button class="secondary" on:click={() => goto("/mcat/diagnostic")}>
+            <button
+                class="secondary"
+                on:click={async () => {
+                    // Re-run the diagnostic load so each attempt is a fresh draw.
+                    await invalidate("mcat:diagnostic");
+                    goto("/mcat/diagnostic");
+                }}
+            >
                 Take diagnostic
             </button>
             <button class="secondary" on:click={() => (lanOpen = true)}>
