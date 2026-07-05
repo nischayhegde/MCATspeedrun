@@ -22,6 +22,11 @@ def test_readiness_withholds_score_below_the_give_up_bar():
     assert resp.ready is False
     assert resp.not_ready_reason != ""
     assert resp.readiness_score == 0
+    assert resp.readiness_pct == 0
+    assert resp.confidence_pct == 0
+    assert resp.confidence_band == 0
+    assert resp.range_low == 0
+    assert resp.range_high == 0
     assert len(resp.reasons) == 0
     # the taxonomy is enumerated regardless of assessment, so all 34 leaves
     # are present even with zero notes imported
