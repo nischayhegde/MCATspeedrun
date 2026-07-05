@@ -471,7 +471,10 @@ fn build_mcat_readiness(col: &mut Collection) -> Result<scheduler::McatReadiness
                 is_cars: leaf.is_cars,
                 weight: leaf.weight,
                 fluency: s.fluency,
-                application: s.application,
+                // Shown application is shrunk for thin evidence so a single
+                // correct diagnostic MCQ doesn't read as near-total mastery
+                // next to 0 fluency (raw application still drives scheduling).
+                application: scoring::display_application(&s),
                 mastery: scoring::mastery_adjusted(&leaf, &s, &bundle.states),
                 attempts: s.attempts.round() as u32,
                 freshness: s.freshness,

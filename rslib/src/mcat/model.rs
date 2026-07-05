@@ -277,6 +277,11 @@ pub const SPEED_QUALITY_FLOOR: f32 = 0.7; // slowest correct still earns this
 pub const DIFF_EVIDENCE_STEP: f32 = 0.15; // evidence scaling per difficulty step
 pub const APP_DEMONSTRATED_TARGET: f32 = 1.3; // effective corrects to demonstrate
 pub const APP_MIN_CORRECTED_ACCURACY: f32 = 0.5; // corrected-accuracy floor ditto
+// Below this many effective attempts (~two graded MCQs: a first weight-1.0
+// answer + a same-day 0.3), the DISPLAYED application is shrunk toward the
+// prior so a single correct MCQ doesn't read as near-total mastery. Display
+// only — the raw application still drives scheduling + the fluency bridge.
+pub const APP_DISPLAY_CONFIDENT_ATTEMPTS: f32 = 1.25;
 
 // FC-pooled shrinkage
 pub const FC_PRIOR_PSEUDO_N: f32 = 10.0; // pseudo-evidence of the global prior

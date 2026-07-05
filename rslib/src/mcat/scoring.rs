@@ -256,6 +256,21 @@ pub fn top_reasons(states: &HashMap<String, LeafState>) -> Vec<String> {
         .collect()
 }
 
+/// Application as shown on the dashboard. Once a leaf has enough graded MCQ
+/// evidence (~two answers — see [`APP_DISPLAY_CONFIDENT_ATTEMPTS`]) the raw
+/// score is shown; below that a single correct answer would otherwise read as
+/// near-total mastery, so it is shrunk by evidence depth. Display only: the raw
+/// `application` still drives scheduling and the application-implies-fluency
+/// bridge (see `aggregate.rs`).
+pub fn display_application(s: &LeafState) -> f32 {
+    if s.attempts >= APP_DISPLAY_CONFIDENT_ATTEMPTS {
+        return clamp01(s.application);
+    }
+    let n = (s.attempts * s.freshness).max(0.0);
+    let w = n / (n + N_TARGET);
+    clamp01(w * clamp01(s.application))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -482,6 +497,28 @@ mod tests {
             s
         });
         assert_eq!(give_up_reason(MIN_GRADED_REVIEWS_FOR_SCORE, &states), None);
+    }
+
+    #[test]
+    fn display_application_shrinks_thin_evidence_but_trusts_enough() {
+        // one correct MCQ -> raw application ~1.0, but with ~one attempt of
+        // evidence the DISPLAYED value is pulled down so a single correct
+        // answer can't read as near-total mastery.
+        let mut s = LeafState::empty("1B");
+        s.application = 1.0;
+        s.attempts = 1.0;
+        s.freshness = 1.0;
+        let thin = display_application(&s);
+        assert!(thin < 0.4, "thin application shown as {thin}");
+
+        // ~two graded MCQs (attempts >= APP_DISPLAY_CONFIDENT_ATTEMPTS) -> the
+        // real score is shown, so a demonstrated leaf reads high.
+        s.attempts = 1.3;
+        let demonstrated = display_application(&s);
+        assert!(demonstrated > 0.9, "demonstrated application shown as {demonstrated}");
+
+        // a never-assessed leaf reads 0, not a phantom number
+        assert_eq!(display_application(&LeafState::empty("1B")), 0.0);
     }
 
     #[test]
