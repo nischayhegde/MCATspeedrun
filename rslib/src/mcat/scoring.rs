@@ -425,10 +425,48 @@ mod tests {
     }
 
     #[test]
-    fn give_up_below_review_or_coverage_threshold() {
-        let states = states_with(|l| LeafState::empty(l.id)); // nothing assessed
+    fn give_up_under_zero_evidence() {
+        // nothing assessed -> the first section reads as a blackout and blocks
+        // scoring before the review-count/coverage branch is even reached
+        let states = states_with(|l| LeafState::empty(l.id));
         let reason = give_up_reason(0, &states).expect("zero evidence must block scoring");
         assert!(!reason.is_empty());
+    }
+
+    #[test]
+    fn give_up_names_review_and_coverage_shortfall_when_sections_covered() {
+        // Every leaf assessed -> the section-blackout check passes and
+        // give_up_reason falls through to the review-count/coverage branch,
+        // the core give-up line that give_up_under_zero_evidence never reaches.
+        let all_assessed = states_with(|l| {
+            let mut s = LeafState::empty(l.id);
+            s.assessed = true;
+            s
+        });
+        // full coverage but under the review floor -> blocked on review count,
+        // and the message names the exact shortfall
+        let reason = give_up_reason(MIN_GRADED_REVIEWS_FOR_SCORE - 1, &all_assessed)
+            .expect("under the review floor must block scoring");
+        assert!(
+            reason.contains(&format!("/{} graded reviews", MIN_GRADED_REVIEWS_FOR_SCORE)),
+            "expected the review-shortfall message, got: {reason}"
+        );
+
+        // one assessed leaf per section: sections all pass the blackout check,
+        // but total blueprint coverage (~15%) is under the 50% bar, with
+        // reviews above the floor -> blocked on coverage, not review count
+        let mut one_per_section: HashMap<String, LeafState> = HashMap::new();
+        for id in ["4A", "1A", "6A", "CARS1"] {
+            let mut s = LeafState::empty(id);
+            s.assessed = true;
+            one_per_section.insert(id.to_string(), s);
+        }
+        let reason = give_up_reason(MIN_GRADED_REVIEWS_FOR_SCORE, &one_per_section)
+            .expect("under 50% coverage must block scoring");
+        assert!(
+            reason.contains("topic coverage"),
+            "expected the coverage-shortfall message, got: {reason}"
+        );
     }
 
     #[test]

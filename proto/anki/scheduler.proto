@@ -636,9 +636,12 @@ message McatReadinessResponse {
   // +/- points band on the 472..528 scale.
   int32 confidence_band = 7;
   repeated McatLeafState leaves = 8;
-  // False when the give-up rule blocks scoring; all numeric fields above
-  // are 0 and `reasons` is empty in that case. Clients must check this
-  // before rendering any of the score fields.
+  // False when the give-up rule blocks scoring. In that case the score
+  // fields — readiness_pct, readiness_score, confidence_pct, confidence_band,
+  // range_low, range_high — are all 0 and `reasons` is empty, while the
+  // evidence diagnostics coverage/depth/freshness stay populated because they
+  // explain the abstention (the not_ready_reason text cites coverage).
+  // Clients must check this before rendering any score.
   bool ready = 9;
   // Empty when ready; otherwise the exact reason a score isn't shown yet.
   string not_ready_reason = 10;
