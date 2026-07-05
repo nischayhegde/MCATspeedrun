@@ -45,14 +45,14 @@ commit immediately before MCAT work began
 - `rslib/src/mcat/{adapter,aggregate,diagnostic,grader,leaf_tag,mod,model,scheduler,scoring,taxonomy}.rs`
 - `rslib/src/storage/mcat/{create.sql,get.sql,mod.rs,upsert.sql}`
 
-**Existing upstream files touched (all additive, +343/−2 lines total across 8 files):**
+**Existing upstream files touched (all additive, +348/−2 lines total across 8 files):**
 
 | File | Lines changed | What changed | Merge risk |
 |---|---|---|---|
 | `proto/anki/scheduler.proto` | +154 | New MCAT RPCs/messages appended to the service/file | Low — pure additions at the end of existing blocks; conflicts only if upstream also appends near the same lines. |
 | `proto/anki/frontend.proto` | +17 | Frontend-facing message additions | Low, same reason. |
 | `rslib/src/scheduler/service/mod.rs` | +156 | New `BackendSchedulerService` trait method impls (`compute_mcat_readiness` etc.) + `build_mcat_readiness` helper | Low-medium — this file is actively developed upstream (FSRS work lands here too), so line-based conflicts are plausible, but the new code is additive (new fn + new match arms), not a rewrite of existing logic. |
-| `rslib/src/backend/mod.rs` | +4/−2 | Wiring for the new RPCs | Low — small, mechanical. |
+| `rslib/src/backend/mod.rs` | +2/−2 | Wiring for the new RPCs | Low — small, mechanical. |
 | `rslib/src/lib.rs` | +1 | `mod mcat;` declaration | Trivial. |
 | `rslib/src/scheduler/answering/mod.rs` | +12 | Hook so MCAT leaf state recomputes after a normal answer | Low-medium — touches a hot upstream file; review any upstream diff here closely on merge. |
 | `rslib/src/storage/mod.rs` | +1 | Re-export of the new `mcat` storage module | Trivial. |
