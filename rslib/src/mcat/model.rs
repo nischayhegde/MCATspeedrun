@@ -233,9 +233,9 @@ impl Default for StudyConfig {
 // ---- shared calibration constants (see PRD + 2026-07-01 scoring spec) ------
 pub const N_TARGET: f32 = 5.0; // spaced recalls for full evidence depth
 pub const R_TARGET: f32 = 0.9; // desired retrievability
-// Application only unlocks once fluency reads as fully mastered (matches the
-// UI's rounded-to-100% display, so "gate open" and "100% fluency" never
-// visibly disagree).
+                               // Application only unlocks once fluency reads as fully mastered (matches the
+                               // UI's rounded-to-100% display, so "gate open" and "100% fluency" never
+                               // visibly disagree).
 pub const FLUENCY_GATE_THRESHOLD: f32 = 0.995;
 pub const RECENCY_TAU_DAYS: f32 = 21.0;
 pub const DAY_MS: i64 = 86_400_000;
@@ -287,6 +287,10 @@ pub const PRIOR_MASTERY: f32 = 0.1; // no-evidence prior mastery
 pub const SIGMA_MAX: f32 = 0.5; // per-leaf sd at zero evidence
 pub const LEAF_CORRELATION: f32 = 0.3; // cross-leaf ability correlation
 pub const SCALE_POINTS: f32 = 56.0; // width of the 472..528 scale
+
+// give-up rule (readiness must not be shown below this bar — see PRD section 4)
+pub const MIN_GRADED_REVIEWS_FOR_SCORE: u32 = 200;
+pub const MIN_COVERAGE_FOR_SCORE: f32 = 0.5;
 
 pub fn clamp01(x: f32) -> f32 {
     x.clamp(0.0, 1.0)

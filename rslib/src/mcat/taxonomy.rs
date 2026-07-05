@@ -148,6 +148,22 @@ const CARS_SKILLS: &[(&str, &str, f32)] = &[
     ("CARS3", "Reasoning Beyond the Text", 0.4),
 ];
 
+/// All four MCAT sections, for coverage/give-up checks that need to iterate
+/// every section (as opposed to every leaf).
+pub const ALL_SECTIONS: [Section; 4] =
+    [Section::Cpbs, Section::Bbls, Section::Psbb, Section::Cars];
+
+/// Full display name for a section, for user-facing give-up-rule messages
+/// (contrast with the short "C/P"/"B/B"/"P/S"/"CARS" labels used elsewhere).
+pub fn section_full_name(section: Section) -> &'static str {
+    match section {
+        Section::Cpbs => "Chemical/Physical Foundations",
+        Section::Bbls => "Biological/Biochemical Foundations",
+        Section::Psbb => "Psychological/Social/Biological Foundations",
+        Section::Cars => "CARS",
+    }
+}
+
 /// Build the full leaf list with derived weights.
 pub fn leaves() -> Vec<Leaf> {
     let mut out = Vec::with_capacity(34);

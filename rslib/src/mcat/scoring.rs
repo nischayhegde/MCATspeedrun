@@ -7,6 +7,7 @@
 use std::collections::HashMap;
 
 use super::model::*;
+use super::taxonomy;
 use super::taxonomy::leaves;
 use super::taxonomy::Leaf;
 
@@ -199,6 +200,61 @@ pub fn leaf_def(id: &str) -> Option<Leaf> {
     super::taxonomy::leaf(id)
 }
 
+/// Give-up rule: `None` when a score should be shown, `Some(reason)` naming
+/// exactly why not otherwise. The whole-section check runs first because it
+/// is a more specific, more actionable reason than a generic "not enough
+/// data yet" — a 10,000-card deck that skips a whole section must not read
+/// as ready just because its totals clear the bar (see PRD section 4 / 7c).
+pub fn give_up_reason(total_reviews: u32, states: &HashMap<String, LeafState>) -> Option<String> {
+    for section in taxonomy::ALL_SECTIONS.iter().copied() {
+        let (w_sum, w_assessed) = leaves().iter().filter(|l| l.section == section).fold(
+            (0.0f32, 0.0f32),
+            |(ws, wa), l| {
+                let assessed = states.get(l.id).map(|s| s.assessed).unwrap_or(false);
+                (ws + l.weight, wa + if assessed { l.weight } else { 0.0 })
+            },
+        );
+        if w_sum > 0.0 && w_assessed == 0.0 {
+            return Some(format!(
+                "No {} questions answered yet \u{2014} every section needs at least some coverage before a score is meaningful.",
+                taxonomy::section_full_name(section)
+            ));
+        }
+    }
+    let cov = confidence(states).coverage;
+    if total_reviews < MIN_GRADED_REVIEWS_FOR_SCORE || cov < MIN_COVERAGE_FOR_SCORE {
+        return Some(format!(
+            "Not enough data yet: {total_reviews}/{min_rev} graded reviews and {cov_pct:.0}%/{min_cov_pct:.0}% topic coverage.",
+            min_rev = MIN_GRADED_REVIEWS_FOR_SCORE,
+            cov_pct = cov * 100.0,
+            min_cov_pct = MIN_COVERAGE_FOR_SCORE * 100.0,
+        ));
+    }
+    None
+}
+
+/// The up-to-3 assessed leaves with the lowest evidence-shrunk mastery,
+/// formatted for display. Empty when nothing is assessed yet.
+pub fn top_reasons(states: &HashMap<String, LeafState>) -> Vec<String> {
+    let mut scored: Vec<(Leaf, f32)> = leaves()
+        .into_iter()
+        .filter_map(|l| {
+            let s = states.get(l.id)?;
+            if !s.assessed {
+                return None;
+            }
+            let m = mastery_adjusted(&l, s, states);
+            Some((l, m))
+        })
+        .collect();
+    scored.sort_by(|a, b| a.1.total_cmp(&b.1));
+    scored
+        .into_iter()
+        .take(3)
+        .map(|(leaf, m)| format!("{} is your weakest area at {:.0}% mastery", leaf.name, m * 100.0))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -345,5 +401,66 @@ mod tests {
         assert!(low.band <= cold.band);
         assert!(high.band < low.band);
         assert!(high.band >= 1);
+    }
+
+    #[test]
+    fn give_up_when_a_whole_section_is_untouched() {
+        // every non-CARS leaf assessed; CARS never attempted at all
+        let mut states = HashMap::new();
+        for l in leaves() {
+            if l.is_cars {
+                continue;
+            }
+            let mut s = LeafState::empty(l.id);
+            s.assessed = true;
+            s.fluency = 1.0;
+            s.application = 1.0;
+            s.attempts = 1000.0;
+            s.freshness = 1.0;
+            states.insert(l.id.to_string(), s);
+        }
+        let reason =
+            give_up_reason(1000, &states).expect("a CARS blackout must block scoring");
+        assert!(reason.contains("CARS"), "reason was: {reason}");
+    }
+
+    #[test]
+    fn give_up_below_review_or_coverage_threshold() {
+        let states = states_with(|l| LeafState::empty(l.id)); // nothing assessed
+        let reason = give_up_reason(0, &states).expect("zero evidence must block scoring");
+        assert!(!reason.is_empty());
+    }
+
+    #[test]
+    fn score_shown_once_reviews_and_coverage_clear_the_bar() {
+        let states = states_with(|l| {
+            let mut s = LeafState::empty(l.id);
+            s.assessed = true;
+            s.fluency = 0.7;
+            s.application = 0.7;
+            s.attempts = 10.0;
+            s.freshness = 1.0;
+            s
+        });
+        assert_eq!(give_up_reason(MIN_GRADED_REVIEWS_FOR_SCORE, &states), None);
+    }
+
+    #[test]
+    fn top_reasons_ranks_weakest_leaves_first() {
+        let mut states = HashMap::new();
+        for (id, mastery) in [("1A", 0.9f32), ("1B", 0.2), ("1C", 0.5)] {
+            let mut s = LeafState::empty(id);
+            s.assessed = true;
+            s.fluency = mastery;
+            s.application = mastery;
+            s.attempts = 1000.0; // deep evidence so mastery_adjusted ~= mastery
+            s.freshness = 1.0;
+            states.insert(id.to_string(), s);
+        }
+        let reasons = top_reasons(&states);
+        assert!(
+            reasons[0].contains("Gene"),
+            "weakest leaf (1B, 'Gene -> protein') should lead: {reasons:?}"
+        );
     }
 }
