@@ -10,6 +10,8 @@
 //! used here. This mirrors the reference TypeScript engine in
 //! `mcat-ui/src/engine`.
 
+use std::collections::HashMap;
+
 /// FSRS answer buttons (Again/Hard/Good/Easy). Matches FSRS `1..=4`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Grade {
@@ -208,6 +210,19 @@ pub struct Confidence {
     pub freshness: f32,
     /// +/- points on the 472..528 scale.
     pub band: i32,
+}
+
+/// Full readiness computation, including give-up gating. `give_up_reason` is
+/// `Some` when [`Readiness`]/[`Confidence`] must not be shown to the student;
+/// `reasons` (top contributing factors) is only populated when it is `None`.
+#[derive(Clone, Debug)]
+pub struct McatReadinessBundle {
+    pub readiness: Readiness,
+    pub confidence: Confidence,
+    pub total_reviews: u32,
+    pub give_up_reason: Option<String>,
+    pub reasons: Vec<String>,
+    pub states: HashMap<String, LeafState>,
 }
 
 /// Session pacing/selection configuration.

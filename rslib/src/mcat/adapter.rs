@@ -139,12 +139,23 @@ fn build_card_reviews(
 /// Collection-config key for the per-student MCQ pace factor.
 const MCAT_PACE_FACTOR_KEY: &str = "mcatPaceFactor";
 
+/// Collection-config key for the total count of graded MCAT reviews, used by
+/// the give-up rule. Incremented once per accepted answer (both MCQ and
+/// flashcard paths, in `mcat_apply_grade`), reset to 0 by `mcat_reset_progress`.
+const MCAT_TOTAL_REVIEWS_KEY: &str = "mcatTotalGradedReviews";
+
 impl Collection {
     /// The student's stored pace factor (1.0 until enough timed MCQ evidence
     /// accrues; refreshed by [`Collection::mcat_refresh_pace_factor`]).
     fn mcat_pace_factor(&self) -> f32 {
         self.get_config_optional(MCAT_PACE_FACTOR_KEY)
             .unwrap_or(1.0)
+    }
+
+    /// Total graded MCAT reviews recorded so far, used by the give-up rule.
+    pub(crate) fn mcat_total_graded_reviews(&self) -> u32 {
+        self.get_config_optional(MCAT_TOTAL_REVIEWS_KEY)
+            .unwrap_or(0)
     }
 
     /// Per-item thresholds, widened/narrowed by the student's own measured
@@ -341,7 +352,8 @@ impl Collection {
         self.transact_no_undo(|col| {
             col.storage.clear_revlog_for_cards(&ids)?;
             col.storage.clear_mcat_answer_log()?;
-            col.storage.clear_mcat_leaf_states()
+            col.storage.clear_mcat_leaf_states()?;
+            col.set_config(MCAT_TOTAL_REVIEWS_KEY, &0u32)
         })?;
 
         // Rebuild the empty baseline so readiness/confidence read as fresh.
@@ -355,15 +367,29 @@ impl Collection {
     }
 
     /// Blueprint-weighted readiness + confidence from the persisted leaf
-    /// states.
-    pub fn mcat_readiness(&self) -> Result<(Readiness, Confidence)> {
+    /// states, gated by the give-up rule (see [`scoring::give_up_reason`]).
+    pub fn mcat_readiness(&self) -> Result<McatReadinessBundle> {
         let states: HashMap<String, LeafState> = self
             .storage
             .all_mcat_leaf_states()?
             .into_iter()
             .map(|s| (s.id.clone(), s))
             .collect();
-        Ok((scoring::readiness(&states), scoring::confidence(&states)))
+        let total_reviews = self.mcat_total_graded_reviews();
+        let give_up_reason = scoring::give_up_reason(total_reviews, &states);
+        let reasons = if give_up_reason.is_none() {
+            scoring::top_reasons(&states)
+        } else {
+            Vec::new()
+        };
+        Ok(McatReadinessBundle {
+            readiness: scoring::readiness(&states),
+            confidence: scoring::confidence(&states),
+            total_reviews,
+            give_up_reason,
+            reasons,
+            states,
+        })
     }
 
     /// Build the interleaved study queue from the collection's MCAT-tagged
@@ -735,7 +761,10 @@ fn mcat_apply_grade(
     }
     .into();
     answer.from_queue = false;
-    col.answer_card_inner(&mut answer)
+    col.answer_card_inner(&mut answer)?;
+    let total = col.mcat_total_graded_reviews() + 1;
+    col.set_config(MCAT_TOTAL_REVIEWS_KEY, &total)?;
+    Ok(())
 }
 
 /// Turn an Image field into a root-absolute media URL the webview can load.
@@ -1004,5 +1033,34 @@ mod tests {
         assert!(note_is_application(&["mcat::app".to_string()]));
         assert!(note_is_application(&["mcat::app::discrete".to_string()]));
         assert!(!note_is_application(&["mcat::cc::1B".to_string()]));
+    }
+
+    #[test]
+    fn total_graded_reviews_counts_and_resets() {
+        let mut col = Collection::new();
+        let mut note = NoteAdder::basic(&mut col)
+            .fields(&["Glycolysis", "Splits glucose into two pyruvate"])
+            .add(&mut col);
+        note.tags.push("mcat::cc::1D".into());
+        col.update_note(&mut note).unwrap();
+        let card = col.get_first_card();
+
+        assert_eq!(col.mcat_total_graded_reviews(), 0);
+        col.mcat_answer_card(card.id, true, 4_000, 3).unwrap();
+        assert_eq!(col.mcat_total_graded_reviews(), 1);
+        col.mcat_answer_card(card.id, true, 4_000, 3).unwrap();
+        assert_eq!(col.mcat_total_graded_reviews(), 2);
+
+        col.mcat_reset_progress().unwrap();
+        assert_eq!(col.mcat_total_graded_reviews(), 0);
+    }
+
+    #[test]
+    fn mcat_readiness_bundle_reports_give_up_reason_cold() {
+        let col = Collection::new();
+        let bundle = col.mcat_readiness().unwrap();
+        assert!(bundle.give_up_reason.is_some());
+        assert!(bundle.reasons.is_empty());
+        assert_eq!(bundle.total_reviews, 0);
     }
 }
