@@ -206,8 +206,9 @@ pub fn leaf_def(id: &str) -> Option<Leaf> {
 /// data yet" — a 10,000-card deck that skips a whole section must not read
 /// as ready just because its totals clear the bar (see PRD section 4 / 7c).
 pub fn give_up_reason(total_reviews: u32, states: &HashMap<String, LeafState>) -> Option<String> {
+    let all = leaves();
     for section in taxonomy::ALL_SECTIONS.iter().copied() {
-        let (w_sum, w_assessed) = leaves().iter().filter(|l| l.section == section).fold(
+        let (w_sum, w_assessed) = all.iter().filter(|l| l.section == section).fold(
             (0.0f32, 0.0f32),
             |(ws, wa), l| {
                 let assessed = states.get(l.id).map(|s| s.assessed).unwrap_or(false);
