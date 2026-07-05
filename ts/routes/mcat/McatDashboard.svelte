@@ -39,9 +39,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         resetting = true;
         try {
             readiness = await resetMcatProgress({});
-            // Drop the cached diagnostic so the next attempt draws a fresh,
-            // newly-seeded question set instead of replaying the last one.
+            // Drop the cached diagnostic and study queue so the next attempt
+            // draws a fresh, newly-seeded set instead of replaying the last one.
             await invalidate("mcat:diagnostic");
+            await invalidate("mcat:study");
             confirmingReset = false;
         } finally {
             resetting = false;
@@ -191,7 +192,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 class="primary"
                 disabled={!diagnosticDone}
                 title={diagnosticDone ? undefined : "Complete a diagnostic first"}
-                on:click={() => goto("/mcat/study")}
+                on:click={async () => {
+                    // Re-run the study load so each session is a fresh draw.
+                    await invalidate("mcat:study");
+                    goto("/mcat/study");
+                }}
             >
                 Study now
             </button>

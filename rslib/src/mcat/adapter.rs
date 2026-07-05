@@ -484,7 +484,10 @@ impl Collection {
         if session_size > 0 {
             config.session_size = session_size;
         }
-        let queue = build_queue(&selectable, &states, &ctx, now_ms, &config);
+        // Seed the queue's tie-break shuffle from the current time so each
+        // session rotates equal-priority cards (see build_queue); scheduling
+        // priority itself is unaffected.
+        let queue = build_queue(&selectable, &states, &ctx, now_ms, &config, now_ms as u64);
 
         let mut items = Vec::with_capacity(queue.len());
         for qi in queue {

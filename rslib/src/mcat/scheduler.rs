@@ -85,12 +85,33 @@ const NEW_ROTE_PRIORITY: f32 = 2.5;
 const MAINTENANCE_BASE: f32 = 3.0;
 const APPLICATION_BASE: f32 = 1.0;
 
+/// Seeded xorshift64* Fisher-Yates shuffle. Used to break ties among
+/// equal-priority candidates so the queue head isn't pinned to the same cards
+/// every session, WITHOUT disturbing scheduling: it runs before the stable
+/// priority sort, so cards of different priority keep their order and only
+/// equal-priority cards (e.g. the pile of new rote all at [`NEW_ROTE_PRIORITY`])
+/// rotate. Seeded so `build_queue` stays deterministic-given-seed and testable.
+fn shuffle_by_seed<T>(v: &mut [T], seed: u64) {
+    let mut x = seed | 1;
+    let mut next = move || {
+        x ^= x >> 12;
+        x ^= x << 25;
+        x ^= x >> 27;
+        x.wrapping_mul(0x2545_F491_4F6C_DD1D)
+    };
+    for i in (1..v.len()).rev() {
+        let j = (next() % (i as u64 + 1)) as usize;
+        v.swap(i, j);
+    }
+}
+
 pub fn build_queue(
     cards: &[SelectableCard],
     states: &HashMap<String, LeafState>,
     ctx: &SelectionContext,
     now_ms: i64,
     config: &StudyConfig,
+    seed: u64,
 ) -> Vec<QueueItem> {
     let mut cands: Vec<Cand> = Vec::new();
 
@@ -208,6 +229,13 @@ pub fn build_queue(
             });
         }
     }
+
+    // Break ties randomly (per-session seed) BEFORE the stable priority sort,
+    // so cards of equal scheduling priority — notably the pile of new rote all
+    // at NEW_ROTE_PRIORITY — rotate instead of the same ones always leading.
+    // The stable sort below preserves this order only among equal-priority
+    // cards, so due/maintenance/fluency/application prioritisation is untouched.
+    shuffle_by_seed(&mut cands, seed);
 
     // spaced-repetition order: most due first
     cands.sort_by(|a, b| {
@@ -403,7 +431,7 @@ mod tests {
     #[test]
     fn mixes_rote_and_application() {
         let (cards, states, ctx) = sample();
-        let q = build_queue(&cards, &states, &ctx, NOW, &StudyConfig::default());
+        let q = build_queue(&cards, &states, &ctx, NOW, &StudyConfig::default(), 1);
         assert!(q.len() > 4);
         assert!(q.iter().any(|i| i.kind == SelKind::Flashcard));
         assert!(q.iter().any(|i| i.kind == SelKind::Mcq));
@@ -413,7 +441,7 @@ mod tests {
     #[test]
     fn no_two_same_subtopic_adjacent() {
         let (cards, states, ctx) = sample();
-        let q = build_queue(&cards, &states, &ctx, NOW, &StudyConfig::default());
+        let q = build_queue(&cards, &states, &ctx, NOW, &StudyConfig::default(), 1);
         for w in q.windows(2) {
             assert_ne!(w[0].leaf_id, w[1].leaf_id);
         }
@@ -426,7 +454,7 @@ mod tests {
             session_size: 100,
             ..StudyConfig::default()
         };
-        let q = build_queue(&cards, &states, &ctx, NOW, &cfg);
+        let q = build_queue(&cards, &states, &ctx, NOW, &cfg, 1);
         let mut counts: HashMap<String, usize> = HashMap::new();
         for i in &q {
             *counts.entry(i.leaf_id.clone()).or_default() += 1;
@@ -461,7 +489,7 @@ mod tests {
                 reps: 0,
             },
         ];
-        let q = build_queue(&cards, &states, &ctx, NOW, &StudyConfig::default());
+        let q = build_queue(&cards, &states, &ctx, NOW, &StudyConfig::default(), 1);
         assert!(
             q.iter().any(|i| i.card_id == "due-rote"),
             "due maintenance rote should appear"
@@ -495,7 +523,7 @@ mod tests {
             })
             .collect();
 
-        let q = build_queue(&cards, &states, &ctx, NOW, &StudyConfig::default());
+        let q = build_queue(&cards, &states, &ctx, NOW, &StudyConfig::default(), 1);
         assert!(
             q.iter().filter(|i| i.kind == SelKind::Mcq).count() >= 1,
             "unseen application MCQs should be served even just after practice"
@@ -530,7 +558,7 @@ mod tests {
             session_size: 1,
             ..StudyConfig::default()
         };
-        let q = build_queue(&cards, &states, &SelectionContext::default(), NOW, &cfg);
+        let q = build_queue(&cards, &states, &SelectionContext::default(), NOW, &cfg, 1);
         assert_eq!(q.len(), 1);
         assert_eq!(
             q[0].leaf_id, "1C",
@@ -586,6 +614,7 @@ mod tests {
             &SelectionContext::default(),
             NOW,
             &StudyConfig::default(),
+            1,
         );
         assert_eq!(q.len(), 12);
         let mcqs = q.iter().filter(|i| i.kind == SelKind::Mcq).count();
@@ -624,7 +653,7 @@ mod tests {
             session_size: 1,
             ..StudyConfig::default()
         };
-        let q = build_queue(&cards, &states, &SelectionContext::default(), NOW, &cfg);
+        let q = build_queue(&cards, &states, &SelectionContext::default(), NOW, &cfg, 1);
         assert_eq!(q.len(), 1);
         assert_eq!(
             q[0].leaf_id, "1C",
@@ -653,6 +682,7 @@ mod tests {
             &SelectionContext::default(),
             NOW,
             &StudyConfig::default(),
+            1,
         );
         assert!(
             q.iter().any(|i| i.card_id == "q1b"),
@@ -668,7 +698,48 @@ mod tests {
                 c.seen = true;
             }
         }
-        let q = build_queue(&cards, &states, &ctx, NOW, &StudyConfig::default());
+        let q = build_queue(&cards, &states, &ctx, NOW, &StudyConfig::default(), 1);
         assert!(q.iter().all(|i| i.kind == SelKind::Flashcard));
+    }
+
+    #[test]
+    fn tied_priority_cards_vary_with_seed_but_stay_reproducible() {
+        // Many NEW rote flashcards across leaves all share the same priority
+        // (NEW_ROTE_PRIORITY). Without a per-session tie-break shuffle the queue
+        // head is identical every time — the "same first cards forever" bug.
+        let mut states = HashMap::new();
+        let mut cards = Vec::new();
+        for leaf in ["1A", "1B", "1C", "1D"] {
+            states.insert(leaf.to_string(), closed_state(leaf));
+            for i in 0..3 {
+                cards.push(SelectableCard {
+                    card_id: format!("fc-{leaf}-{i}"),
+                    leaf_id: leaf.to_string(),
+                    kind: SelKind::Flashcard,
+                    is_cars: false,
+                    seen: false,
+                    due_ms: None,
+                    reps: 0,
+                });
+            }
+        }
+        let cfg = StudyConfig::default();
+        let ctx = SelectionContext::default();
+        let order = |seed| -> Vec<String> {
+            build_queue(&cards, &states, &ctx, NOW, &cfg, seed)
+                .into_iter()
+                .map(|i| i.card_id)
+                .collect()
+        };
+        // different seeds -> different order (the "hint of randomness")
+        assert_ne!(order(1), order(2), "the queue head must vary across sessions");
+        // same seed -> reproducible (deterministic-given-seed, so tests are stable)
+        assert_eq!(order(7), order(7));
+        // same multiset either way: randomness only reorders, never drops/adds
+        let mut a = order(1);
+        let mut b = order(2);
+        a.sort();
+        b.sort();
+        assert_eq!(a, b, "shuffle must not change which cards are selected");
     }
 }

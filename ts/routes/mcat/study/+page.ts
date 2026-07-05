@@ -6,7 +6,11 @@ import { computeMcatReadiness, getMcatStudyQueue } from "@generated/backend";
 
 import type { PageLoad } from "./$types";
 
-export const load = (async () => {
+export const load = (async ({ depends }) => {
+    // Without a tracked dependency SvelteKit caches this load and replays the
+    // same study queue on every re-entry. Register one so re-entering Study (or
+    // resetting) draws a freshly-shuffled queue. See McatDashboard's handlers.
+    depends("mcat:study");
     const [queue, readiness] = await Promise.all([
         getMcatStudyQueue({ sessionSize: 0 }),
         computeMcatReadiness({}),
