@@ -118,48 +118,71 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 </div>
             {/if}
         </div>
-        <div class="score-block">
-            <div class="score">{readiness.readinessScore}</div>
-            <div class="scale">/ 528</div>
-        </div>
-        <div class="meta">
-            <div class="mastery">
-                {Math.round(readiness.readinessPct)}% blueprint mastery
-            </div>
-            <div class="confidence">
-                <span class="conf-pct">±{readiness.confidenceBand} pts</span>
-                <span class="conf-label">
-                    {Math.round(readiness.confidencePct)}% confidence
-                </span>
-            </div>
-            <p class="rough-note">
-                Estimate is rough — you've assessed {pct(readiness.coverage)} of the blueprint.
-                {#if refreshing}<span class="refreshing-note">refreshing…</span>{/if}
-            </p>
-            <details class="conf-details">
-                <summary>How is this computed?</summary>
-                <div class="conf-breakdown">
-                    <div class="conf-row">
-                        <span class="conf-row-label">coverage</span>
-                        <MeterBar value={readiness.coverage} tone="gold" />
-                        <span class="conf-row-val">{pct(readiness.coverage)}</span>
-                    </div>
-                    <div class="conf-row">
-                        <span class="conf-row-label">depth</span>
-                        <MeterBar value={readiness.depth} tone="gold" />
-                        <span class="conf-row-val">{pct(readiness.depth)}</span>
-                    </div>
-                    <div class="conf-row">
-                        <span class="conf-row-label">freshness</span>
-                        <MeterBar value={readiness.freshness} tone="gold" />
-                        <span class="conf-row-val">{pct(readiness.freshness)}</span>
-                    </div>
+        {#if !readiness.ready}
+            <div class="not-ready">
+                <div class="not-ready-title">Not enough data for a score yet</div>
+                <p class="not-ready-reason">{readiness.notReadyReason}</p>
+                <div class="assessed">
+                    {assessedCount} / {readiness.leaves.length} subtopics assessed &middot;
+                    {readiness.totalGradedReviews} graded reviews
+                    {#if refreshing}<span class="refreshing-note">refreshing…</span>{/if}
                 </div>
-            </details>
-            <div class="assessed">
-                {assessedCount} / {readiness.leaves.length} subtopics assessed
             </div>
-        </div>
+        {:else}
+            <div class="score-block">
+                <div class="score">{readiness.readinessScore}</div>
+                <div class="scale">/ 528</div>
+            </div>
+            <div class="meta">
+                <div class="mastery">
+                    {Math.round(readiness.readinessPct)}% blueprint mastery
+                </div>
+                <div class="range">
+                    Likely range: {readiness.rangeLow} to {readiness.rangeHigh}
+                </div>
+                <div class="confidence">
+                    <span class="conf-pct">±{readiness.confidenceBand} pts</span>
+                    <span class="conf-label">
+                        {Math.round(readiness.confidencePct)}% confidence
+                    </span>
+                </div>
+                <p class="rough-note">
+                    Estimate is rough — you've assessed {pct(readiness.coverage)} of the blueprint.
+                    Updated {new Date(Number(readiness.lastUpdatedMs)).toLocaleString()}.
+                    {#if refreshing}<span class="refreshing-note">refreshing…</span>{/if}
+                </p>
+                {#if readiness.reasons.length > 0}
+                    <ul class="reasons">
+                        {#each readiness.reasons as reason}
+                            <li>{reason}</li>
+                        {/each}
+                    </ul>
+                {/if}
+                <details class="conf-details">
+                    <summary>How is this computed?</summary>
+                    <div class="conf-breakdown">
+                        <div class="conf-row">
+                            <span class="conf-row-label">coverage</span>
+                            <MeterBar value={readiness.coverage} tone="gold" />
+                            <span class="conf-row-val">{pct(readiness.coverage)}</span>
+                        </div>
+                        <div class="conf-row">
+                            <span class="conf-row-label">depth</span>
+                            <MeterBar value={readiness.depth} tone="gold" />
+                            <span class="conf-row-val">{pct(readiness.depth)}</span>
+                        </div>
+                        <div class="conf-row">
+                            <span class="conf-row-label">freshness</span>
+                            <MeterBar value={readiness.freshness} tone="gold" />
+                            <span class="conf-row-val">{pct(readiness.freshness)}</span>
+                        </div>
+                    </div>
+                </details>
+                <div class="assessed">
+                    {assessedCount} / {readiness.leaves.length} subtopics assessed
+                </div>
+            </div>
+        {/if}
         <div class="actions">
             <button
                 class="primary"
@@ -533,6 +556,24 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         margin: 0;
         font-size: 0.82rem;
         color: var(--sf-dim);
+    }
+
+    .not-ready {
+        grid-column: 1 / -1;
+    }
+    .not-ready-title {
+        font-weight: 600;
+    }
+    .not-ready-reason {
+        color: var(--sf-dim);
+    }
+    .range {
+        font-size: 0.9em;
+    }
+    .reasons {
+        margin: 0.5em 0 0;
+        padding-left: 1.2em;
+        font-size: 0.9em;
     }
 
     .refreshing-note {
