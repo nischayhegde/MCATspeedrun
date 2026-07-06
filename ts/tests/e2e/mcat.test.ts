@@ -9,11 +9,12 @@ test("mcat dashboard renders scorecard", async ({ page }) => {
     await expect(page.locator(".score")).toBeVisible();
 });
 
-test("mcat study page loads (question or empty state)", async ({ page }) => {
+test("mcat study page redirects to the diagnostic before any evidence exists", async ({ page }) => {
+    // A fresh profile has no assessed leaves yet, so Study is gated behind
+    // taking (at least part of) the diagnostic first.
     await page.goto("/mcat/study");
-    await expect(
-        page.locator(".study-page .card, .study-page .complete").first(),
-    ).toBeVisible();
+    await expect(page).toHaveURL(/\/mcat\/diagnostic$/);
+    await expect(page.locator(".diagnostic")).toBeVisible();
 });
 
 test("mcat diagnostic intro renders", async ({ page }) => {

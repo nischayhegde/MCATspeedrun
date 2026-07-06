@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
     ActivityIndicator,
-    Button,
     StyleSheet,
     Text,
     TextInput,
@@ -10,6 +9,8 @@ import {
 
 import { answerMcatCardTyped } from "@/api/client";
 import type { ServerConfig } from "@/api/pairing";
+import { SfButton } from "@/components/SfButton";
+import { Palette } from "@/constants/theme";
 import type { McatStudyItem } from "@/gen/anki/scheduler_pb";
 import { AnswerMcatCardTypedResponse_Verdict as Verdict } from "@/gen/anki/scheduler_pb";
 
@@ -72,6 +73,14 @@ export function TypedFlashcard({
         ? "Partially correct"
         : "Incorrect";
 
+    const verdictColor = gaveUp
+        ? Palette.textSecondary
+        : verdict === Verdict.CORRECT
+        ? Palette.ok
+        : verdict === Verdict.PARTIAL
+        ? Palette.warn
+        : Palette.err;
+
     return (
         <View style={styles.card}>
             <Text style={styles.leaf}>
@@ -86,6 +95,7 @@ export function TypedFlashcard({
                         value={typed}
                         onChangeText={setTyped}
                         placeholder="Describe it from memory…"
+                        placeholderTextColor={Palette.steel}
                         editable={phase !== "error"}
                     />
                     {phase === "error" && (
@@ -93,7 +103,7 @@ export function TypedFlashcard({
                             <Text style={styles.error}>
                                 Grading failed: {gradeError}
                             </Text>
-                            <Button
+                            <SfButton
                                 title="Retry grading"
                                 onPress={() => submit(gaveUp)}
                             />
@@ -101,12 +111,13 @@ export function TypedFlashcard({
                     )}
                     {phase === "prompt" && (
                         <View style={styles.row}>
-                            <Button
+                            <SfButton
                                 title="Submit"
                                 onPress={() => submit(false)}
                             />
-                            <Button
+                            <SfButton
                                 title="I don't know"
+                                variant="secondary"
                                 onPress={() => submit(true)}
                             />
                         </View>
@@ -115,13 +126,15 @@ export function TypedFlashcard({
             )}
             {phase === "grading" && (
                 <View style={styles.grading}>
-                    <ActivityIndicator />
+                    <ActivityIndicator color={Palette.red} />
                     <Text style={styles.gradingText}>Grading…</Text>
                 </View>
             )}
             {phase === "graded" && (
                 <View style={styles.feedbackBox}>
-                    <Text style={styles.verdict}>{verdictLabel}</Text>
+                    <Text style={[styles.verdict, { color: verdictColor }]}>
+                        {verdictLabel}
+                    </Text>
                     {feedback !== "" && (
                         <Text style={styles.llmNote}>{feedback}</Text>
                     )}
@@ -133,25 +146,39 @@ export function TypedFlashcard({
 }
 
 const styles = StyleSheet.create({
-    card: { gap: 10 },
-    leaf: { fontSize: 12, color: "#888" },
-    front: { fontSize: 17, fontWeight: "600", lineHeight: 24 },
+    card: {
+        gap: 10,
+        padding: 14,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: Palette.border,
+        backgroundColor: Palette.backgroundElement,
+    },
+    leaf: { fontSize: 12, color: Palette.textSecondary },
+    front: {
+        fontSize: 17,
+        fontWeight: "600",
+        lineHeight: 24,
+        color: Palette.text,
+    },
     input: {
         borderWidth: 1,
-        borderColor: "#8886",
+        borderColor: Palette.border,
         borderRadius: 10,
         padding: 12,
         minHeight: 90,
         textAlignVertical: "top",
         fontSize: 15,
+        backgroundColor: Palette.backgroundElement,
+        color: Palette.text,
     },
     row: { flexDirection: "row", gap: 12, justifyContent: "space-between" },
     grading: { flexDirection: "row", gap: 10, alignItems: "center" },
-    gradingText: { color: "#777" },
+    gradingText: { color: Palette.textSecondary },
     errorBox: { gap: 8 },
-    error: { color: "#c0392b" },
+    error: { color: Palette.err },
     feedbackBox: { gap: 8 },
     verdict: { fontWeight: "800", fontSize: 16 },
-    llmNote: { fontStyle: "italic", color: "#555" },
-    back: { lineHeight: 21 },
+    llmNote: { fontStyle: "italic", color: Palette.textSecondary },
+    back: { lineHeight: 21, color: Palette.text },
 });

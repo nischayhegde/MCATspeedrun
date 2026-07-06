@@ -1,5 +1,7 @@
 import { StyleSheet, View } from "react-native";
 
+import { Palette } from "@/constants/theme";
+
 export function MeterBar({ value }: { value: number }) {
     const pct = Math.max(0, Math.min(1, value)) * 100;
     return (
@@ -14,8 +16,8 @@ const styles = StyleSheet.create({
         flex: 1,
         height: 8,
         borderRadius: 4,
-        backgroundColor: "#00000022",
+        backgroundColor: "#ffffff1f",
         overflow: "hidden",
     },
-    fill: { height: "100%", borderRadius: 4, backgroundColor: "#f5c451" },
+    fill: { height: "100%", borderRadius: 4, backgroundColor: Palette.gold },
 });

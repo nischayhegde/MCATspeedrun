@@ -270,21 +270,26 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             on:exit={openConfirm}
         />
 
-        <QuestionCard image={item.image} front={item.front} />
+        <div class="mcq-layout">
+            <div class="mcq-question">
+                <QuestionCard image={item.image} front={item.front} />
+            </div>
+            <div class="mcq-answer">
+                <ChoiceGrid
+                    choices={item.choices}
+                    lettersOnly={!!item.image}
+                    graded={false}
+                    {pending}
+                    on:choose={(e) => onChoose(e.detail.letter)}
+                />
 
-        <ChoiceGrid
-            choices={item.choices}
-            lettersOnly={!!item.image}
-            graded={false}
-            {pending}
-            on:choose={(e) => onChoose(e.detail.letter)}
-        />
+                <IdkButton selected={pending === IDK} on:choose={() => onChoose(IDK)} />
 
-        <IdkButton selected={pending === IDK} on:choose={() => onChoose(IDK)} />
-
-        <p class="lock-hint" class:show={pending !== null && index < 3}>
-            press again to lock in
-        </p>
+                <p class="lock-hint" class:show={pending !== null && index < 3}>
+                    press again to lock in
+                </p>
+            </div>
+        </div>
 
         {#if confirmOpen}
             <div class="confirm-scrim">
@@ -365,7 +370,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     .diagnostic {
         height: 100%;
-        max-width: 46rem;
+        /* Wider than the intro/results reading column (46rem, see .panel) so
+           an exam question's image and its choices can sit side by side. */
+        max-width: 64rem;
         margin: 0 auto;
         padding: 0.9rem 1.25rem 1rem;
         font-family: var(--mcat-font, system-ui, sans-serif);
@@ -377,12 +384,18 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         box-sizing: border-box;
     }
 
+    @include sf.mcq-columns;
+
     /* Each phase panel fills the leftover height and scrolls inside its own
        box if unusually tall; the page itself can also scroll as a fallback
-       so actions at the bottom (e.g. Continue) are never clipped. */
+       so actions at the bottom (e.g. Continue) are never clipped. Capped and
+       centered so intro/results text doesn't stretch the full wide shell. */
     .panel {
         flex: 1 1 auto;
         min-height: 0;
+        max-width: 46rem;
+        width: 100%;
+        margin: 0 auto;
         overflow: auto;
         background: var(--canvas-elevated, #fff);
         border: 1px solid var(--border, #ccc);

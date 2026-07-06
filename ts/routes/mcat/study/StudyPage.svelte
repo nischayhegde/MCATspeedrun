@@ -311,107 +311,128 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             height={100}
         />
         {#if isMcq}
-            <QuestionCard
-                image={item.image}
-                front={item.front}
-                alt={`${item.leafName} question`}
-            />
-            <ChoiceGrid
-                choices={item.choices}
-                lettersOnly={!!item.image}
-                graded
-                {chosen}
-                answer={item.answer}
-                disabled={chosen !== null || paused}
-                collapsed={chosen !== null}
-                on:choose={(e) => chooseLetter(e.detail.letter)}
-            />
-            {#if chosen === null}
-                <IdkButton disabled={answering || paused} on:choose={chooseIdk} />
-            {:else}
-                <div class="feedback" class:correct class:idk={chosen === IDK}>
-                    <strong>
-                        {#if chosen === IDK}
-                            Good call — the answer is {item.answer}.
-                        {:else if correct}
-                            Correct
-                        {:else}
-                            Incorrect — answer: {item.answer}
-                        {/if}
-                    </strong>
-                    {#if item.explanation}
-                        <p>{item.explanation}</p>
+            <div class="mcq-layout">
+                <div class="mcq-question">
+                    <QuestionCard
+                        image={item.image}
+                        front={item.front}
+                        alt={`${item.leafName} question`}
+                    />
+                </div>
+                <div class="mcq-answer">
+                    <ChoiceGrid
+                        choices={item.choices}
+                        lettersOnly={!!item.image}
+                        graded
+                        {chosen}
+                        answer={item.answer}
+                        disabled={chosen !== null || paused}
+                        collapsed={chosen !== null}
+                        on:choose={(e) => chooseLetter(e.detail.letter)}
+                    />
+                    {#if chosen === null}
+                        <IdkButton
+                            disabled={answering || paused}
+                            on:choose={chooseIdk}
+                        />
+                    {:else}
+                        <div class="feedback" class:correct class:idk={chosen === IDK}>
+                            <strong>
+                                {#if chosen === IDK}
+                                    Good call — the answer is {item.answer}.
+                                {:else if correct}
+                                    Correct
+                                {:else}
+                                    Incorrect — answer: {item.answer}
+                                {/if}
+                            </strong>
+                            {#if item.explanation}
+                                <p>{item.explanation}</p>
+                            {/if}
+                            <button class="primary" on:click={next}>
+                                Continue <KeyHint key="␣" />
+                            </button>
+                        </div>
                     {/if}
-                    <button class="primary" on:click={next}>
-                        Continue <KeyHint key="␣" />
-                    </button>
                 </div>
-            {/if}
+            </div>
         {:else}
-            <QuestionCard front={item.front} alt={`${item.leafName} prompt`} center />
-            {#if flashPhase === "prompt" || flashPhase === "error"}
-                <div class="typed-entry">
-                    <!-- svelte-ignore a11y-autofocus -->
-                    <textarea
-                        bind:value={typedAnswer}
-                        rows="3"
-                        placeholder="Describe this term from memory…"
-                        autofocus
-                        disabled={paused}
-                        on:keydown={onAnswerKeydown}
-                    ></textarea>
-                    <div class="typed-actions">
-                        <button
-                            class="primary"
+            <div class="flash-content">
+                <QuestionCard
+                    front={item.front}
+                    alt={`${item.leafName} prompt`}
+                    center
+                />
+                {#if flashPhase === "prompt" || flashPhase === "error"}
+                    <div class="typed-entry">
+                        <!-- svelte-ignore a11y-autofocus -->
+                        <textarea
+                            bind:value={typedAnswer}
+                            rows="3"
+                            placeholder="Describe this term from memory…"
+                            autofocus
                             disabled={paused}
-                            on:click={() => submitTyped(false)}
-                        >
-                            Submit <KeyHint key="↵" />
-                        </button>
-                        <IdkButton disabled={paused} on:choose={() => submitTyped(true)} />
+                            on:keydown={onAnswerKeydown}
+                        ></textarea>
+                        <div class="typed-actions">
+                            <button
+                                class="primary"
+                                disabled={paused}
+                                on:click={() => submitTyped(false)}
+                            >
+                                Submit <KeyHint key="↵" />
+                            </button>
+                            <IdkButton
+                                disabled={paused}
+                                on:choose={() => submitTyped(true)}
+                            />
+                        </div>
                     </div>
-                </div>
-                {#if flashPhase === "error"}
-                    <div class="feedback grade-error">
-                        <strong>Grading failed — your answer is kept.</strong>
-                        <p>{gradeError}</p>
-                        <button class="primary" on:click={() => submitTyped(gaveUp)}>
-                            Retry
-                        </button>
-                    </div>
-                {/if}
-            {:else}
-                <div class="answer">
-                    <hr />
-                    <p class="back">{item.back}</p>
-                </div>
-                {#if !gaveUp && typedAnswer.trim()}
-                    <p class="typed-echo">
-                        <span>Your answer:</span>
-                        {typedAnswer}
-                    </p>
-                {/if}
-                {#if flashPhase === "grading"}
-                    <div class="grading">Grading your answer…</div>
+                    {#if flashPhase === "error"}
+                        <div class="feedback grade-error">
+                            <strong>Grading failed — your answer is kept.</strong>
+                            <p>{gradeError}</p>
+                            <button
+                                class="primary"
+                                on:click={() => submitTyped(gaveUp)}
+                            >
+                                Retry
+                            </button>
+                        </div>
+                    {/if}
                 {:else}
-                    <div
-                        class="feedback"
-                        class:correct={!gaveUp &&
-                            verdict === AnswerMcatCardTypedResponse_Verdict.CORRECT}
-                        class:partial={!gaveUp &&
-                            verdict === AnswerMcatCardTypedResponse_Verdict.PARTIAL}
-                        class:idk={gaveUp}
-                    >
-                        <strong>{verdictLabel}</strong>
-                        {#if feedback}
-                            <p>{feedback}</p>
-                        {/if}
-                        <button class="primary" on:click={next}>
-                            Continue <KeyHint key="␣" />
-                        </button>
+                    <div class="answer">
+                        <hr />
+                        <p class="back">{item.back}</p>
                     </div>
+                    {#if !gaveUp && typedAnswer.trim()}
+                        <p class="typed-echo">
+                            <span>Your answer:</span>
+                            {typedAnswer}
+                        </p>
+                    {/if}
+                    {#if flashPhase === "grading"}
+                        <div class="grading">Grading your answer…</div>
+                    {:else}
+                        <div
+                            class="feedback"
+                            class:correct={!gaveUp &&
+                                verdict === AnswerMcatCardTypedResponse_Verdict.CORRECT}
+                            class:partial={!gaveUp &&
+                                verdict === AnswerMcatCardTypedResponse_Verdict.PARTIAL}
+                            class:idk={gaveUp}
+                        >
+                            <strong>{verdictLabel}</strong>
+                            {#if feedback}
+                                <p>{feedback}</p>
+                            {/if}
+                            <button class="primary" on:click={next}>
+                                Continue <KeyHint key="␣" />
+                            </button>
+                        </div>
+                    {/if}
                 {/if}
-            {/if}
+            </div>
         {/if}
     {:else}
         <div class="complete">
@@ -429,7 +450,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     .study-page {
         height: 100%;
-        max-width: 46rem;
+        /* Wider than the flashcard reading column (46rem, see .flash-content)
+           so an MCQ's image and its choices/explanation can sit side by side
+           without either being cramped. */
+        max-width: 64rem;
         margin: 0 auto;
         padding: 0.9rem 1.25rem 1rem;
         display: flex;
@@ -439,6 +463,19 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         overflow-y: auto;
         box-sizing: border-box;
     }
+
+    .flash-content {
+        flex: 1 1 auto;
+        min-height: 0;
+        max-width: 46rem;
+        width: 100%;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 0.7rem;
+    }
+
+    @include sf.mcq-columns;
 
     .pause-overlay {
         position: fixed;

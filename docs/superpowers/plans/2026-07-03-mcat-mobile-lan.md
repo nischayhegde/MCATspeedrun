@@ -2516,9 +2516,8 @@ export function McqCard({
         setBusy(true);
         setError("");
         const correct = !idk && letter === item.answer;
-        const ms =
-            submittedMsRef.current ??
-            Math.min(Date.now() - startedAt, 10 * 60 * 1000);
+        const ms = submittedMsRef.current
+            ?? Math.min(Date.now() - startedAt, 10 * 60 * 1000);
         submittedMsRef.current = ms;
         try {
             await answerMcatCard(config, {

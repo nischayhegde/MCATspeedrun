@@ -1,5 +1,7 @@
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
+import { Palette } from "@/constants/theme";
+
 export function ErrorBanner({
     message,
     onRetry,
@@ -34,7 +36,7 @@ export function ErrorBanner({
 
 const styles = StyleSheet.create({
     banner: {
-        backgroundColor: "#7a1f1f",
+        backgroundColor: Palette.redDeep,
         padding: 12,
         borderRadius: 10,
         margin: 12,

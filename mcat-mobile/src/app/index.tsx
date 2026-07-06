@@ -1,7 +1,6 @@
 import { Redirect, router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import {
-    Button,
     RefreshControl,
     ScrollView,
     StyleSheet,
@@ -17,6 +16,8 @@ import {
 import { useConnection } from "@/api/ConnectionContext";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { MeterBar } from "@/components/MeterBar";
+import { SfButton } from "@/components/SfButton";
+import { Palette } from "@/constants/theme";
 import type {
     McatLeafState,
     McatReadinessResponse,
@@ -92,6 +93,8 @@ export default function Dashboard() {
             refreshControl={
                 <RefreshControl
                     refreshing={refreshing}
+                    tintColor={Palette.red}
+                    colors={[Palette.red]}
                     onRefresh={async () => {
                         setRefreshing(true);
                         await load(true);
@@ -145,12 +148,13 @@ export default function Dashboard() {
                         </View>
                     </View>
                     <View style={styles.actions}>
-                        <Button
+                        <SfButton
                             title="Study now"
                             onPress={() => router.push("/study")}
                         />
-                        <Button
+                        <SfButton
                             title="Take diagnostic"
+                            variant="secondary"
                             onPress={() => router.push("/diagnostic")}
                         />
                     </View>
@@ -208,12 +212,14 @@ const styles = StyleSheet.create({
     scoreCard: {
         padding: 16,
         borderRadius: 14,
-        backgroundColor: "#00000010",
+        backgroundColor: Palette.backgroundElement,
+        borderWidth: 1,
+        borderColor: Palette.border,
         gap: 6,
     },
-    score: { fontSize: 52, fontWeight: "900" },
-    scale: { fontSize: 18, fontWeight: "400", color: "#888" },
-    meta: { color: "#666" },
+    score: { fontSize: 52, fontWeight: "900", color: Palette.text },
+    scale: { fontSize: 18, fontWeight: "400", color: Palette.textSecondary },
+    meta: { color: Palette.textSecondary },
     actions: { gap: 8 },
     section: { gap: 8 },
     sectionLabel: {
@@ -221,17 +227,24 @@ const styles = StyleSheet.create({
         fontWeight: "800",
         textTransform: "uppercase",
         letterSpacing: 1,
-        color: "#888",
+        color: Palette.textSecondary,
     },
     leaf: {
         padding: 10,
         borderRadius: 10,
-        backgroundColor: "#00000008",
+        backgroundColor: Palette.backgroundElement,
+        borderWidth: 1,
+        borderColor: Palette.border,
         gap: 4,
     },
     unassessed: { opacity: 0.5 },
-    leafName: { fontWeight: "600" },
+    leafName: { fontWeight: "600", color: Palette.text },
     metricRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-    metricLabel: { width: 78, fontSize: 12, color: "#777" },
-    metricVal: { width: 42, textAlign: "right", fontSize: 12, color: "#777" },
+    metricLabel: { width: 78, fontSize: 12, color: Palette.textSecondary },
+    metricVal: {
+        width: 42,
+        textAlign: "right",
+        fontSize: 12,
+        color: Palette.textSecondary,
+    },
 });

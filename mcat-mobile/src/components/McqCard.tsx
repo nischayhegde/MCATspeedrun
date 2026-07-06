@@ -3,6 +3,7 @@ import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { answerMcatCard, mediaHeaders, mediaUrl } from "@/api/client";
 import type { ServerConfig } from "@/api/pairing";
+import { Palette } from "@/constants/theme";
 import type { McatStudyItem } from "@/gen/anki/scheduler_pb";
 
 const LETTERS = ["A", "B", "C", "D"];
@@ -112,7 +113,16 @@ export function McqCard({
             {error !== "" && <Text style={styles.error}>{error}</Text>}
             {answered && showFeedback && (
                 <View style={styles.feedback}>
-                    <Text style={styles.verdict}>
+                    <Text
+                        style={[
+                            styles.verdict,
+                            chosen === "__idk__"
+                                ? styles.verdictIdk
+                                : wasCorrect
+                                ? styles.verdictOk
+                                : styles.verdictErr,
+                        ]}
+                    >
                         {chosen === "__idk__"
                             ? `Didn't know — answer: ${item.answer}`
                             : wasCorrect
@@ -131,9 +141,16 @@ export function McqCard({
 }
 
 const styles = StyleSheet.create({
-    card: { gap: 10 },
-    leaf: { fontSize: 12, color: "#888" },
-    stem: { fontSize: 16, lineHeight: 23 },
+    card: {
+        gap: 10,
+        padding: 14,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: Palette.border,
+        backgroundColor: Palette.backgroundElement,
+    },
+    leaf: { fontSize: 12, color: Palette.textSecondary },
+    stem: { fontSize: 16, lineHeight: 23, color: Palette.text },
     image: {
         width: "100%",
         height: 260,
@@ -142,16 +159,30 @@ const styles = StyleSheet.create({
     },
     choice: {
         borderWidth: 1,
-        borderColor: "#8886",
+        borderColor: Palette.border,
         borderRadius: 10,
         padding: 12,
+        backgroundColor: Palette.backgroundSelected,
     },
-    idk: { borderStyle: "dashed", opacity: 0.8 },
-    correctChoice: { borderColor: "#2e7d32", backgroundColor: "#2e7d3222" },
-    wrongChoice: { borderColor: "#c62828", backgroundColor: "#c6282822" },
-    choiceText: { fontSize: 15 },
-    error: { color: "#c0392b" },
+    idk: {
+        borderStyle: "dashed",
+        borderColor: Palette.steel,
+        opacity: 0.8,
+    },
+    correctChoice: {
+        borderColor: Palette.ok,
+        backgroundColor: "#2fd67a22",
+    },
+    wrongChoice: {
+        borderColor: Palette.err,
+        backgroundColor: "#ff5d6c22",
+    },
+    choiceText: { fontSize: 15, color: Palette.text },
+    error: { color: Palette.err },
     feedback: { gap: 6, marginTop: 4 },
     verdict: { fontWeight: "800" },
-    explanation: { color: "#555", lineHeight: 20 },
+    verdictOk: { color: Palette.ok },
+    verdictErr: { color: Palette.err },
+    verdictIdk: { color: Palette.textSecondary },
+    explanation: { color: Palette.textSecondary, lineHeight: 20 },
 });

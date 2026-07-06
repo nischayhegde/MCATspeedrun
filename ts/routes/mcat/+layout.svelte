@@ -5,11 +5,32 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 <script lang="ts">
     import { goto } from "$app/navigation";
     import { page } from "$app/stores";
+    import { onMount } from "svelte";
 
     import type { LayoutData } from "./$types";
+    import Cutscene from "./cutscene/Cutscene.svelte";
     import gloveIcon from "./lib/assets/glove-icon.png";
 
     export let data: LayoutData;
+
+    /* Story intro: plays when the app is entered, once per app session.
+       The webview also reloads on sync/reset and the global "d" shortcut,
+       so gate on sessionStorage (which survives those reloads but not an
+       app restart). ?cutscene=1 forces a replay, ?cutscene=0 suppresses
+       (dev + automation escape hatch). Purely cosmetic: the shell below
+       stays mounted and interactive the moment it's skipped. */
+    let showCutscene = false;
+
+    onMount(() => {
+        const forced = new URLSearchParams(window.location.search).get("cutscene");
+        if (forced === "0") {
+            return;
+        }
+        if (forced === "1" || sessionStorage.getItem("sf-intro-seen") !== "1") {
+            sessionStorage.setItem("sf-intro-seen", "1");
+            showCutscene = true;
+        }
+    });
 
     const links = [
         { href: "/mcat", label: "Dashboard" },
@@ -61,6 +82,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     <main class="mcat-content">
         <slot />
     </main>
+    {#if showCutscene}
+        <Cutscene on:close={() => (showCutscene = false)} />
+    {/if}
 </div>
 
 <style lang="scss">

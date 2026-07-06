@@ -388,7 +388,10 @@ mod tests {
         let s = score_leaf(&l, &reviews, &[], NOW);
         assert!(s.application > 0.95, "application was {}", s.application);
         assert!(s.fluency > 0.95, "fluency was {}", s.fluency);
-        assert!(s.gate_open, "perfect application history left the gate closed");
+        assert!(
+            s.gate_open,
+            "perfect application history left the gate closed"
+        );
     }
 
     #[test]

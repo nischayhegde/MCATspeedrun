@@ -1,6 +1,6 @@
 import { Redirect, router } from "expo-router";
 import { useState } from "react";
-import { Button, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 import {
     computeMcatReadiness,
@@ -10,6 +10,8 @@ import {
 import { useConnection } from "@/api/ConnectionContext";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { McqCard } from "@/components/McqCard";
+import { SfButton } from "@/components/SfButton";
+import { Palette } from "@/constants/theme";
 import type {
     McatReadinessResponse,
     McatStudyItem,
@@ -135,9 +137,10 @@ export default function Diagnostic() {
                         score.
                     </Text>
                     {COUNT_CHOICES.map((c) => (
-                        <Button
+                        <SfButton
                             key={c.label}
                             title={c.label}
+                            variant={c.count === 0 ? "primary" : "secondary"}
                             onPress={() => begin(c.count)}
                         />
                     ))}
@@ -156,14 +159,16 @@ export default function Diagnostic() {
                         onAnswered={(correct) => recordAnswer(item, correct)}
                     />
                     {answered && (
-                        <Button
+                        <SfButton
                             title={index + 1 < items.length ? "Next" : "Finish"}
                             onPress={next}
                         />
                     )}
                 </>
             )}
-            {phase === "submitting" && error === "" && <Text>Scoring…</Text>}
+            {phase === "submitting" && error === "" && (
+                <Text style={styles.body}>Scoring…</Text>
+            )}
             {phase === "results" && after && (
                 <View style={styles.results}>
                     <Text style={styles.head}>Results</Text>
@@ -181,7 +186,7 @@ export default function Diagnostic() {
                             {after.readinessScore} / 528
                         </Text>
                     )}
-                    <Button
+                    <SfButton
                         title="Back to dashboard"
                         onPress={() => router.back()}
                     />
@@ -193,11 +198,26 @@ export default function Diagnostic() {
 
 const styles = StyleSheet.create({
     container: { padding: 16, gap: 14 },
-    intro: { gap: 12 },
-    head: { fontSize: 22, fontWeight: "800" },
-    body: { lineHeight: 21 },
-    progress: { color: "#888", fontWeight: "600" },
-    results: { gap: 10, alignItems: "flex-start" },
-    bigline: { fontSize: 28, fontWeight: "900" },
-    delta: { fontWeight: "700", marginTop: 6 },
+    intro: {
+        gap: 12,
+        padding: 16,
+        borderRadius: 14,
+        backgroundColor: Palette.backgroundElement,
+        borderWidth: 1,
+        borderColor: Palette.border,
+    },
+    head: { color: Palette.text, fontSize: 22, fontWeight: "800" },
+    body: { color: Palette.text, lineHeight: 21 },
+    progress: { color: Palette.textSecondary, fontWeight: "600" },
+    results: {
+        gap: 10,
+        alignItems: "flex-start",
+        padding: 16,
+        borderRadius: 14,
+        backgroundColor: Palette.backgroundElement,
+        borderWidth: 1,
+        borderColor: Palette.border,
+    },
+    bigline: { color: Palette.text, fontSize: 28, fontWeight: "900" },
+    delta: { color: Palette.gold, fontWeight: "700", marginTop: 6 },
 });
